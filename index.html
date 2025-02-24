@@ -3,226 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PromptCook - AI Prompts Marketplace</title>
+    <title>PromptCook Admin</title>
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <style>
-        .prompt-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .prompt-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        .customize-pulse {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { border-color: #ddd; }
-            50% { border-color: #3B82F6; }
-            100% { border-color: #ddd; }
-        }
-    </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm relative">
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
-                    <h1 class="text-3xl font-bold text-blue-600 inline-block ml-4">PromptCook</h1>
-                </div>
-                <a href="https://instagram.com/yourprofile" target="_blank" 
-                   class="text-blue-600 hover:text-blue-800">
-                    <svg class="w-8 h-8"><!-- Instagram icon SVG --></svg>
-                </a>
-            </div>
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-blue-600">PromptCook Admin</h1>
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Customization Section -->
-        <div class="mb-8 p-6 bg-white rounded-lg shadow-md customize-pulse">
-            <h2 class="text-xl font-semibold mb-4">Customize Your Prompt</h2>
-            <input type="text" id="productInput" 
-                   class="border-2 p-3 rounded-lg w-full" 
-                   placeholder="Enter your product (e.g. 'Pancake')">
-        </div>
-
-        <!-- Trending Section -->
-        <section class="mb-12">
-            <h2 class="text-2xl font-bold mb-6">🔥 Trending Prompts</h2>
-            <div id="trendingPrompts" class="flex overflow-x-auto gap-4 pb-4">
-                <!-- Trending prompts will be loaded here -->
-            </div>
+        <section class="mb-8 p-6 bg-white rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4">Add New Prompt</h2>
+            <form id="addPromptForm">
+                <input type="text" id="promptTitle" placeholder="Title" class="w-full p-3 border rounded-lg mb-4" required>
+                <textarea id="promptText" rows="4" placeholder="Prompt Text" class="w-full p-3 border rounded-lg mb-4" required></textarea>
+                <input type="text" id="promptImage" placeholder="Image URL (Optional)" class="w-full p-3 border rounded-lg mb-4">
+                <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
+                    Add Prompt
+                </button>
+            </form>
         </section>
 
-        <!-- All Prompts Grid -->
         <section>
             <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
-            <div id="promptsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Prompt cards will be loaded here -->
-            </div>
+            <div id="promptsList" class="space-y-4"></div>
         </section>
     </main>
 
-    <!-- AI Tools Button -->
-    <div class="fixed bottom-4 right-4">
-        <button onclick="showAITools()" 
-                class="bg-purple-600 text-white px-6 py-3 rounded-full shadow-lg hover:bg-purple-700">
-            🛠️ AI Tools
-        </button>
-    </div>
-
-    <!-- AI Tools Modal -->
-    <div id="aiToolsModal" class="hidden fixed inset-0 bg-black bg-opacity-50">
-        <div class="bg-white rounded-lg p-6 max-w-2xl mx-auto mt-20">
-            <div class="flex justify-between mb-4">
-                <h3 class="text-xl font-bold">Recommended AI Tools</h3>
-                <button onclick="hideAITools()" class="text-gray-500">×</button>
-            </div>
-            <div id="aiToolsList" class="space-y-2">
-                <!-- AI tools loaded from Firebase -->
-            </div>
-        </div>
-    </div>
-
     <script type="module">
-        // Firebase Initialization
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
-            authDomain: "promptcook.firebaseapp.com",
-            projectId: "promptcook",
-            storageBucket: "promptcook.appspot.com",
-            messagingSenderId: "629727878561",
-            appId: "1:629727878561:web:a20882f86dad45e7a6bfe0",
-            measurementId: "G-67BF4MEK2T"
-        };
+        const firebaseConfig = { /* Same config as index.html */ };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // DOM Elements
-        const productInput = document.getElementById('productInput');
-        const promptsGrid = document.getElementById('promptsGrid');
-        const trendingPrompts = document.getElementById('trendingPrompts');
-        const aiToolsList = document.getElementById('aiToolsList');
+        const addPromptForm = document.getElementById('addPromptForm');
+        const promptsList = document.getElementById('promptsList');
 
-        // Real-time Prompt Updater
-        productInput.addEventListener('input', () => {
-            document.querySelectorAll('.prompt-text').forEach(element => {
-                element.textContent = element.dataset.original.replace(/<cust>/g, productInput.value);
-            });
+        addPromptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('promptTitle').value;
+            const promptText = document.getElementById('promptText').value;
+            const promptImage = document.getElementById('promptImage').value;
+
+            await addDoc(collection(db, "prompts"), { title, prompt: promptText, image: promptImage });
+            addPromptForm.reset();
         });
 
-        // Load Prompts from Firestore
-        const loadPrompts = async () => {
-            const querySnapshot = await getDocs(collection(db, "prompts"));
-            
-            querySnapshot.forEach(doc => {
-                const promptData = doc.data();
-                const promptCard = 
-                    <div class="prompt-card bg-white rounded-xl p-6 shadow-md">
-                        <h3 class="font-bold text-lg mb-2">${promptData.title}</h3>
-                        ${promptData.type === 'both' ? 
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <h4 class="text-blue-600 font-semibold">Image Prompt</h4>
-                                    <div class="prompt-text mb-4 text-gray-700" 
-                                         data-original="${promptData.prompt.image}">
-                                        ${promptData.prompt.image.replace(/<cust>/g, productInput.value || 'product')}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 class="text-green-600 font-semibold">Video Prompt</h4>
-                                    <div class="prompt-text mb-4 text-gray-700" 
-                                         data-original="${promptData.prompt.video}">
-                                        ${promptData.prompt.video.replace(/<cust>/g, productInput.value || 'product')}
-                                    </div>
-                                </div>
-                            </div>
-                         : 
-                            <div class="prompt-text mb-4 text-gray-700" 
-                                 data-original="${promptData.prompt}">
-                                ${promptData.prompt.replace(/<cust>/g, productInput.value || 'product')}
-                            </div>
-                        }
-                        <div class="flex justify-between items-center">
-                            <button onclick="copyPrompt('${doc.id}', this)" 
-                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
-                                Copy Prompt
-                            </button>
-                            <span class="text-gray-500 text-sm">Used ${promptData.usedCount || 0} times</span>
-                        </div>
-                    </div>
-                ;
-                promptsGrid.insertAdjacentHTML('beforeend', promptCard);
+        onSnapshot(collection(db, "prompts"), (snapshot) => {
+            promptsList.innerHTML = "";
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                promptsList.innerHTML += `<div>${data.title} - ${data.prompt} <img src="${data.image || ''}" class="max-w-xs mt-2"></div>`;
             });
-
-            // Load Trending Prompts
-            const sortedPrompts = querySnapshot.docs.sort((a, b) => 
-                b.data().usedCount - a.data().usedCount
-            ).slice(0, 5);
-            
-            sortedPrompts.forEach(doc => {
-                const trendingPrompt = 
-                    <div class="flex-shrink-0 w-64 bg-white p-4 rounded-lg shadow">
-                        <div class="truncate mb-2">${doc.data().title}</div>
-                        <div class="text-blue-500 text-sm">Used ${doc.data().usedCount} times</div>
-                    </div>
-                ;
-                trendingPrompts.insertAdjacentHTML('beforeend', trendingPrompt);
-            });
-        };
-
-        // Copy Prompt Function
-        window.copyPrompt = async (docId, button) => {
-            const promptText = button.parentElement.parentElement.querySelector('.prompt-text').textContent;
-            
-            try {
-                await navigator.clipboard.writeText(promptText);
-                await updateDoc(doc(db, "prompts", docId), {
-                    usedCount: increment(1)
-                });
-                button.textContent = "Copied!";
-                setTimeout(() => {
-                    button.textContent = "Copy Prompt";
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        };
-
-        // AI Tools Modal
-        window.showAITools = () => {
-            document.getElementById('aiToolsModal').classList.remove('hidden');
-        };
-        window.hideAITools = () => {
-            document.getElementById('aiToolsModal').classList.add('hidden');
-        };
-
-        // Load AI Tools
-        const loadAITools = async () => {
-            const querySnapshot = await getDocs(collection(db, "aiTools"));
-            querySnapshot.forEach(doc => {
-                const tool = doc.data();
-                aiToolsList.innerHTML += 
-                    <a href="${tool.url}" target="_blank" 
-                       class="flex items-center p-3 hover:bg-gray-100 rounded">
-                       <span class="mr-2">${tool.name}</span>
-                       <svg class="w-4 h-4"><!-- external link icon --></svg>
-                    </a>
-                ;
-            });
-        };
-
-        // Initial Load
-        loadPrompts();
-        loadAITools();
+        });
     </script>
 </body>
 </html>
