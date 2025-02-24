@@ -115,76 +115,112 @@
 
         // Load Prompts
         const loadPrompts = async () => {
-            const querySnapshot = await getDocs(collection(db, "prompts"));
-            promptsList.innerHTML = '';
-            querySnapshot.forEach(doc => {
-                const promptData = doc.data();
-                const promptItem = `
-                    <div class="bg-white p-6 rounded-lg shadow-md prompt-card">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="px-2 py-1 rounded 
-                                ${promptData.type === 'image' ? 'bg-blue-100 text-blue-800' : 
-                                 promptData.type === 'video' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'}">
-                                ${promptData.type.toUpperCase()}
-                            </span>
-                            <span class="text-sm text-gray-500">Used ${promptData.usedCount} times</span>
+            try {
+                const querySnapshot = await getDocs(collection(db, "prompts"));
+                promptsList.innerHTML = '';
+                querySnapshot.forEach(doc => {
+                    const promptData = doc.data();
+                    const promptItem = `
+                        <div class="bg-white p-6 rounded-lg shadow-md prompt-card">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2 py-1 rounded 
+                                    ${promptData.type === 'image' ? 'bg-blue-100 text-blue-800' : 
+                                     promptData.type === 'video' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'}">
+                                    ${promptData.type.toUpperCase()}
+                                </span>
+                                <span class="text-sm text-gray-500">Used ${promptData.usedCount || 0} times</span>
+                            </div>
+                            <h3 class="font-bold text-lg mb-2">${promptData.title}</h3>
+                            <div class="text-gray-700 mb-4">${promptData.prompt}</div>
+                            <div class="flex gap-4">
+                                <button onclick="editPrompt('${doc.id}')" 
+                                        class="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition">
+                                    Edit
+                                </button>
+                                <button onclick="deletePrompt('${doc.id}')" 
+                                        class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">
+                                    Delete
+                                </button>
+                            </div>
                         </div>
-                        <h3 class="font-bold text-lg mb-2">${promptData.title}</h3>
-                        <div class="text-gray-700 mb-4">${promptData.prompt}</div>
-                        <div class="flex gap-4">
-                            <button onclick="editPrompt('${doc.id}')" 
-                                    class="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition">
-                                Edit
-                            </button>
-                            <button onclick="deletePrompt('${doc.id}')" 
-                                    class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">
-                                Delete
-                            </button>
-                        </div>
-                    </div>
-                `;
-                promptsList.insertAdjacentHTML('beforeend', promptItem);
-            });
+                    `;
+                    promptsList.insertAdjacentHTML('beforeend', promptItem);
+                });
+            } catch (error) {
+                console.error("Error loading prompts:", error);
+                promptsList.innerHTML = '<div class="text-red-500">Error loading prompts. Please check your connection.</div>';
+            }
         };
 
         // Add New Prompt
         addPromptForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const title = document.getElementById('promptTitle').value;
-            const type = document.getElementById('promptType').value;
-            const promptText = document.getElementById('promptText').value;
-            const aiTools = document.getElementById('aiTools').value.split(',').map(tool => {
-                const [name, url] = tool.split('|');
-                return {name: name.trim(), url: url.trim()};
-            });
-            await addDoc(collection(db, "prompts"), {
-                title,
-                type,
-                prompt: promptText,
-                aiTools,
-                usedCount: 0,
-                createdAt: new Date()
-            });
-            addPromptForm.reset();
-            loadPrompts();
+            
+            try {
+                const title = document.getElementById('promptTitle').value;
+                const type = document.getElementById('promptType').value;
+                const promptText = document.getElementById('promptText').value;
+                
+                // Fixed AI tools processing to handle empty input
+                const aiToolsInput = document.getElementById('aiTools').value.trim();
+                let aiTools = [];
+                
+                if (aiToolsInput) {
+                    aiTools = aiToolsInput.split(',').map(tool => {
+                        if (!tool.includes('|')) {
+                            return { name: tool.trim(), url: '' };
+                        }
+                        const parts = tool.split('|');
+                        const name = parts[0].trim();
+                        const url = parts.length > 1 ? parts[1].trim() : '';
+                        return { name, url };
+                    });
+                }
+                
+                await addDoc(collection(db, "prompts"), {
+                    title,
+                    type,
+                    prompt: promptText,
+                    aiTools,
+                    usedCount: 0,
+                    createdAt: new Date()
+                });
+                
+                addPromptForm.reset();
+                loadPrompts();
+                alert("Prompt added successfully!");
+            } catch (error) {
+                console.error("Error adding prompt:", error);
+                alert("Error adding prompt: " + error.message);
+            }
         });
 
         // Edit Prompt
         window.editPrompt = async (docId) => {
             const newText = prompt("Edit the prompt text:");
             if (newText) {
-                await updateDoc(doc(db, "prompts", docId), {
-                    prompt: newText
-                });
-                loadPrompts();
+                try {
+                    await updateDoc(doc(db, "prompts", docId), {
+                        prompt: newText
+                    });
+                    loadPrompts();
+                } catch (error) {
+                    console.error("Error editing prompt:", error);
+                    alert("Error editing prompt: " + error.message);
+                }
             }
         };
 
         // Delete Prompt
         window.deletePrompt = async (docId) => {
             if (confirm("Are you sure you want to delete this prompt?")) {
-                await deleteDoc(doc(db, "prompts", docId));
-                loadPrompts();
+                try {
+                    await deleteDoc(doc(db, "prompts", docId));
+                    loadPrompts();
+                } catch (error) {
+                    console.error("Error deleting prompt:", error);
+                    alert("Error deleting prompt: " + error.message);
+                }
             }
         };
 
@@ -195,24 +231,48 @@
                 alert("Please select a CSV file.");
                 return;
             }
+            
             Papa.parse(file, {
                 header: true,
                 complete: async (results) => {
-                    for (const row of results.data) {
-                        await addDoc(collection(db, "prompts"), {
-                            title: row.Title,
-                            type: row.Type,
-                            prompt: row.Prompt,
-                            aiTools: row.AI_Tools.split(',').map(tool => {
-                                const [name, url] = tool.split('|');
-                                return {name: name.trim(), url: url.trim()};
-                            }),
-                            usedCount: 0,
-                            createdAt: new Date()
-                        });
+                    try {
+                        let successCount = 0;
+                        
+                        for (const row of results.data) {
+                            if (!row.Title || !row.Prompt) continue; // Skip incomplete rows
+                            
+                            // Handle AI_Tools field with proper error checking
+                            let aiTools = [];
+                            if (row.AI_Tools && row.AI_Tools.trim()) {
+                                aiTools = row.AI_Tools.split(',').map(tool => {
+                                    if (!tool.includes('|')) {
+                                        return { name: tool.trim(), url: '' };
+                                    }
+                                    const parts = tool.split('|');
+                                    const name = parts[0].trim();
+                                    const url = parts.length > 1 ? parts[1].trim() : '';
+                                    return { name, url };
+                                });
+                            }
+                            
+                            await addDoc(collection(db, "prompts"), {
+                                title: row.Title,
+                                type: row.Type || 'image', // Default to image if not specified
+                                prompt: row.Prompt,
+                                aiTools,
+                                usedCount: 0,
+                                createdAt: new Date()
+                            });
+                            
+                            successCount++;
+                        }
+                        
+                        loadPrompts();
+                        alert(`CSV upload complete! ${successCount} prompts added successfully.`);
+                    } catch (error) {
+                        console.error("Error processing CSV:", error);
+                        alert("Error processing CSV: " + error.message);
                     }
-                    loadPrompts();
-                    alert("CSV uploaded successfully!");
                 },
                 error: (error) => {
                     alert("Error parsing CSV: " + error.message);
