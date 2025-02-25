@@ -20,6 +20,7 @@
     <!-- Header -->
     <header class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+            <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
             <h1 class="text-3xl font-bold text-blue-600">PromptCook Admin</h1>
             <a href="https://instagram.com/yourprofile" target="_blank" class="text-blue-600 hover:text-blue-800">
                 <svg class="w-8 h-8"><!-- Instagram icon SVG --></svg>
@@ -39,20 +40,25 @@
                     <option value="video">Video</option>
                     <option value="both">Both</option>
                 </select>
-                <textarea id="promptText" rows="4" placeholder="Prompt Text" class="w-full p-3 border rounded-lg mb-4" required></textarea>
+                <textarea id="promptText" rows="4" placeholder="Prompt Text (use <cust> for customization)" class="w-full p-3 border rounded-lg mb-4" required></textarea>
+                <input type="file" id="imageUpload" accept="image/*" class="w-full p-3 border rounded-lg mb-4">
                 <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
                     Add Prompt
                 </button>
             </form>
         </section>
 
-        <!-- CSV Upload Section -->
+        <!-- Add AI Tools Form -->
         <section class="mb-8 p-6 bg-white rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Bulk Upload via CSV</h2>
-            <input type="file" id="csvUpload" accept=".csv" class="mb-4">
-            <button onclick="processCSV()" class="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600">
-                Upload CSV
-            </button>
+            <h2 class="text-xl font-semibold mb-4">Add AI Tool</h2>
+            <form id="addAIToolForm">
+                <input type="text" id="toolTitle" placeholder="Tool Title" class="w-full p-3 border rounded-lg mb-4" required>
+                <input type="text" id="toolLink" placeholder="Tool Link" class="w-full p-3 border rounded-lg mb-4" required>
+                <textarea id="toolDescription" rows="3" placeholder="Tool Description" class="w-full p-3 border rounded-lg mb-4" required></textarea>
+                <button type="submit" class="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600">
+                    Add AI Tool
+                </button>
+            </form>
         </section>
 
         <!-- Prompts List -->
@@ -65,6 +71,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
@@ -77,10 +84,12 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const storage = getStorage(app);
 
         const addPromptForm = document.getElementById('addPromptForm');
+        const addAIToolForm = document.getElementById('addAIToolForm');
         const promptsList = document.getElementById('promptsList');
-        const csvUpload = document.getElementById('csvUpload');
+        const imageUpload = document.getElementById('imageUpload');
 
         // Add New Prompt
         addPromptForm.addEventListener('submit', async (e) => {
@@ -88,12 +97,37 @@
             const title = document.getElementById('promptTitle').value;
             const type = document.getElementById('promptType').value;
             const promptText = document.getElementById('promptText').value;
+            const imageFile = imageUpload.files[0];
 
             try {
-                await addDoc(collection(db, "prompts"), { title, type, prompt: promptText });
+                let imageUrl = '';
+                if (imageFile) {
+                    const storageRef = ref(storage, `prompts/${imageFile.name}`);
+                    await uploadBytes(storageRef, imageFile);
+                    imageUrl = await getDownloadURL(storageRef);
+                }
+
+                await addDoc(collection(db, "prompts"), { title, type, prompt: promptText, imageUrl, usedCount: 0 });
                 addPromptForm.reset();
             } catch (error) {
                 console.error("Error adding prompt:", error);
+                alert("Error adding prompt: " + error.message);
+            }
+        });
+
+        // Add AI Tool
+        addAIToolForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('toolTitle').value;
+            const link = document.getElementById('toolLink').value;
+            const description = document.getElementById('toolDescription').value;
+
+            try {
+                await addDoc(collection(db, "aiTools"), { title, link, description });
+                addAIToolForm.reset();
+            } catch (error) {
+                console.error("Error adding AI tool:", error);
+                alert("Error adding AI tool: " + error.message);
             }
         });
 
@@ -103,9 +137,10 @@
             snapshot.forEach(doc => {
                 const data = doc.data();
                 promptsList.innerHTML += `
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h3 class="font-bold text-lg">${data.title}</h3>
-                        <p class="text-gray-700">${data.prompt}</p>
+                    <div class="bg-white p-6 rounded-lg shadow-md prompt-card">
+                        <h3 class="font-bold text-lg mb-2">${data.title}</h3>
+                        <p class="text-gray-700 mb-4">${data.prompt.replace(/<cust>/g, '<strong><cust></strong>')}</p>
+                        ${data.imageUrl ? `<img src="${data.imageUrl}" class="w-full h-48 object-cover rounded-lg mb-4">` : ''}
                         <button onclick="deletePrompt('${doc.id}')" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
                             Delete
                         </button>
@@ -118,44 +153,12 @@
         window.deletePrompt = async (docId) => {
             if (confirm("Are you sure you want to delete this prompt?")) {
                 try {
-                    await deleteDoc(doc(db, "prompts", doc(db, "prompts", docId)));
+                    await deleteDoc(doc(db, "prompts", docId));
                 } catch (error) {
                     console.error("Error deleting prompt:", error);
+                    alert("Error deleting prompt: " + error.message);
                 }
             }
-        };
-
-        // Process CSV Upload
-        window.processCSV = () => {
-            const file = csvUpload.files[0];
-            if (!file) {
-                alert("Please select a CSV file.");
-                return;
-            }
-
-            Papa.parse(file, {
-                header: true,
-                complete: async (results) => {
-                    try {
-                        for (const row of results.data) {
-                            if (!row.Title || !row.Prompt) continue;
-
-                            await addDoc(collection(db, "prompts"), {
-                                title: row.Title,
-                                type: row.Type || 'image',
-                                prompt: row.Prompt
-                            });
-                        }
-                        alert("CSV upload successful!");
-                    } catch (error) {
-                        console.error("Error processing CSV:", error);
-                        alert("Error processing CSV: " + error.message);
-                    }
-                },
-                error: (error) => {
-                    alert("Error parsing CSV: " + error.message);
-                }
-            });
         };
     </script>
 </body>
