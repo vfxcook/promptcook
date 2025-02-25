@@ -21,6 +21,10 @@
             50% { border-color: #3B82F6; }
             100% { border-color: #ddd; }
         }
+        .scrollable-text {
+            max-height: 150px; /* Fixed height for text */
+            overflow-y: auto; /* Add scrollbar if text exceeds height */
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -120,14 +124,15 @@
             snapshot.forEach(doc => {
                 const data = doc.data();
                 const promptCard = `
-                    <div class="prompt-card bg-white rounded-xl p-6 shadow-md">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
+                    <div class="prompt-card bg-white rounded-xl p-6 shadow-md h-96 flex flex-col">
+                        <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Left Side: Text -->
+                            <div class="flex flex-col">
                                 <h3 class="font-bold text-lg mb-2">${data.title}</h3>
-                                <div class="prompt-text mb-4 text-gray-700" data-original="${data.prompt}">
+                                <div class="prompt-text scrollable-text text-gray-700 mb-4" data-original="${data.prompt}">
                                     ${data.prompt.replace(/<cust>/g, `<strong>${productInput.value || 'product'}</strong>`)}
                                 </div>
-                                <div class="flex justify-between items-center">
+                                <div class="flex justify-between items-center mt-auto">
                                     <button onclick="copyPrompt('${doc.id}', this)" 
                                             class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
                                         Copy Prompt
@@ -135,8 +140,9 @@
                                     <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
                                 </div>
                             </div>
+                            <!-- Right Side: Image -->
                             ${data.imageUrl ? `
-                                <div>
+                                <div class="flex justify-center items-center">
                                     <img src="${data.imageUrl}" class="w-full h-48 object-cover rounded-lg">
                                 </div>
                             ` : ''}
