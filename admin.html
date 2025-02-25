@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PromptCook Admin</title>
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         .prompt-card {
             transition: transform 0.2s, box-shadow 0.2s;
@@ -41,7 +40,6 @@
                     <option value="both">Both</option>
                 </select>
                 <textarea id="promptText" rows="4" placeholder="Prompt Text (use <cust> for customization)" class="w-full p-3 border rounded-lg mb-4" required></textarea>
-                <input type="file" id="imageUpload" accept="image/*" class="w-full p-3 border rounded-lg mb-4">
                 <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
                     Add Prompt
                 </button>
@@ -66,12 +64,17 @@
             <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
             <div id="promptsList" class="space-y-4"></div>
         </section>
+
+        <!-- AI Tools List -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">All AI Tools</h2>
+            <div id="aiToolsList" class="space-y-4"></div>
+        </section>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
@@ -84,12 +87,11 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
         const addPromptForm = document.getElementById('addPromptForm');
         const addAIToolForm = document.getElementById('addAIToolForm');
         const promptsList = document.getElementById('promptsList');
-        const imageUpload = document.getElementById('imageUpload');
+        const aiToolsList = document.getElementById('aiToolsList');
 
         // Add New Prompt
         addPromptForm.addEventListener('submit', async (e) => {
@@ -97,18 +99,16 @@
             const title = document.getElementById('promptTitle').value;
             const type = document.getElementById('promptType').value;
             const promptText = document.getElementById('promptText').value;
-            const imageFile = imageUpload.files[0];
 
             try {
-                let imageUrl = '';
-                if (imageFile) {
-                    const storageRef = ref(storage, `prompts/${imageFile.name}`);
-                    await uploadBytes(storageRef, imageFile);
-                    imageUrl = await getDownloadURL(storageRef);
-                }
-
-                await addDoc(collection(db, "prompts"), { title, type, prompt: promptText, imageUrl, usedCount: 0 });
+                await addDoc(collection(db, "prompts"), { 
+                    title, 
+                    type, 
+                    prompt: promptText, 
+                    usedCount: 0 
+                });
                 addPromptForm.reset();
+                alert("Prompt added successfully!");
             } catch (error) {
                 console.error("Error adding prompt:", error);
                 alert("Error adding prompt: " + error.message);
@@ -123,8 +123,13 @@
             const description = document.getElementById('toolDescription').value;
 
             try {
-                await addDoc(collection(db, "aiTools"), { title, link, description });
+                await addDoc(collection(db, "aiTools"), { 
+                    title, 
+                    link, 
+                    description 
+                });
                 addAIToolForm.reset();
+                alert("AI Tool added successfully!");
             } catch (error) {
                 console.error("Error adding AI tool:", error);
                 alert("Error adding AI tool: " + error.message);
@@ -140,10 +145,27 @@
                     <div class="bg-white p-6 rounded-lg shadow-md prompt-card">
                         <h3 class="font-bold text-lg mb-2">${data.title}</h3>
                         <p class="text-gray-700 mb-4">${data.prompt.replace(/<cust>/g, '<strong><cust></strong>')}</p>
-                        ${data.imageUrl ? `<img src="${data.imageUrl}" class="w-full h-48 object-cover rounded-lg mb-4">` : ''}
-                        <button onclick="deletePrompt('${doc.id}')" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
-                            Delete
-                        </button>
+                        <div class="flex justify-between items-center">
+                            <button onclick="deletePrompt('${doc.id}')" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+                                Delete
+                            </button>
+                            <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
+                        </div>
+                    </div>
+                `;
+            });
+        });
+
+        // Load AI Tools in Real-Time
+        onSnapshot(collection(db, "aiTools"), (snapshot) => {
+            aiToolsList.innerHTML = "";
+            snapshot.forEach(doc => {
+                const tool = doc.data();
+                aiToolsList.innerHTML += `
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h4 class="font-bold text-lg">${tool.title}</h4>
+                        <p class="text-gray-700 mb-2">${tool.description}</p>
+                        <a href="${tool.link}" target="_blank" class="text-blue-500 hover:text-blue-700">Visit Tool</a>
                     </div>
                 `;
             });
