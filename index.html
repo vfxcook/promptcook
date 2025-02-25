@@ -60,7 +60,7 @@
         <!-- All Prompts Grid -->
         <section>
             <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
-            <div id="promptsGrid" class="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 gap-6">
+            <div id="promptsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Prompt cards will be loaded here -->
             </div>
         </section>
@@ -125,27 +125,18 @@
                 const data = doc.data();
                 const promptCard = `
                     <div class="prompt-card bg-white rounded-xl p-6 shadow-md h-96 flex flex-col">
-                        <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Left Side: Text -->
-                            <div class="flex flex-col">
-                                <h3 class="font-bold text-lg mb-2">${data.title}</h3>
-                                <div class="prompt-text scrollable-text text-gray-700 mb-4" data-original="${data.prompt}">
-                                    ${data.prompt.replace(/<cust>/g, `<strong>${productInput.value || 'product'}</strong>`)}
-                                </div>
-                                <div class="flex justify-between items-center mt-auto">
-                                    <button onclick="copyPrompt('${doc.id}', this)" 
-                                            class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
-                                        Copy Prompt
-                                    </button>
-                                    <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
-                                </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-lg mb-2">${data.title}</h3>
+                            <div class="prompt-text scrollable-text text-gray-700 mb-4" data-original="${data.prompt}">
+                                ${data.prompt.replace(/<cust>/g, `<strong>${productInput.value || 'product'}</strong>`)}
                             </div>
-                            <!-- Right Side: Image -->
-                            ${data.imageUrl ? `
-                                <div class="flex justify-center items-center">
-                                    <img src="${data.imageUrl}" class="w-full h-48 object-cover rounded-lg">
-                                </div>
-                            ` : ''}
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <button onclick="copyPrompt('${doc.id}', this)" 
+                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+                                Copy Prompt
+                            </button>
+                            <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
                         </div>
                     </div>
                 `;
@@ -169,7 +160,7 @@
             });
         });
 
-        // Load AI Tools
+        // Load AI Tools in Real-Time
         onSnapshot(collection(db, "aiTools"), (snapshot) => {
             aiToolsList.innerHTML = "";
             snapshot.forEach(doc => {
