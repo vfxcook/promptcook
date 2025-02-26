@@ -8,10 +8,21 @@
     <style>
         .prompt-card {
             transition: transform 0.2s, box-shadow 0.2s;
+            break-inside: avoid;
         }
         .prompt-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .masonry-grid {
+            column-count: 1;
+            column-gap: 1.5rem;
+        }
+        @media (min-width: 768px) { .masonry-grid { column-count: 2; } }
+        @media (min-width: 1024px) { .masonry-grid { column-count: 3; } }
+        .scrollable-text {
+            max-height: 150px;
+            overflow-y: auto;
         }
         .customize-pulse {
             animation: pulse 2s infinite;
@@ -21,47 +32,64 @@
             50% { border-color: #3B82F6; }
             100% { border-color: #ddd; }
         }
-        .scrollable-text {
-            max-height: 150px; /* Fixed height for text */
-            overflow-y: auto; /* Add scrollbar if text exceeds height */
-        }
     </style>
 </head>
 <body class="bg-gray-50">
     <!-- Header -->
     <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-            <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
-            <h1 class="text-3xl font-bold text-blue-600">PromptCook</h1>
-            <a href="https://instagram.com/yourprofile" target="_blank" class="text-blue-600 hover:text-blue-800">
-                <svg class="w-8 h-8"><!-- Instagram icon SVG --></svg>
-            </a>
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
+                <div class="relative">
+                    <input type="text" id="searchInput" 
+                           class="w-64 px-4 py-2 border rounded-lg" 
+                           placeholder="Search prompts...">
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="filterAll" class="px-4 py-2 rounded-lg bg-blue-100 text-blue-800">All</button>
+                <button id="filterImage" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-600">📸 Image</button>
+                <button id="filterVideo" class="px-4 py-2 rounded-lg bg-gray-100 text-gray-600">🎥 Video</button>
+            </div>
         </div>
     </header>
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 py-8">
         <!-- Customization Section -->
-        <div class="mb-8 p-6 bg-white rounded-lg shadow-md customize-pulse">
-            <h2 class="text-xl font-semibold mb-4">Customize Your Prompt</h2>
+        <div class="mb-8 p-6 bg-white rounded-lg shadow-md customize-pulse border-l-4 border-blue-500">
+            <h2 class="text-xl font-semibold mb-2">Customize All Prompts</h2>
+            <p class="text-gray-600 mb-4 text-sm">Type your product name below to instantly update all <code>&lt;cust&gt;</code> placeholders in the prompts</p>
             <input type="text" id="productInput" 
-                   class="border-2 p-3 rounded-lg w-full" 
-                   placeholder="Enter your product (e.g. 'Pancake')">
+                   class="w-full p-4 border-2 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                   placeholder="Enter your product (e.g. 'Smartwatch')">
         </div>
 
         <!-- Trending Section -->
         <section class="mb-12">
-            <h2 class="text-2xl font-bold mb-6">🔥 Trending Prompts</h2>
-            <div id="trendingPrompts" class="flex overflow-x-auto gap-4 pb-4">
-                <!-- Trending prompts will be loaded here -->
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                🔥 Trending Prompts
+                <span class="text-sm text-gray-500 font-normal">(Most Used)</span>
+            </h2>
+            <div id="trendingPrompts" class="flex overflow-x-auto gap-4 pb-4 scrollbar-hide">
+                <!-- Trending prompts loaded dynamically -->
             </div>
         </section>
 
         <!-- All Prompts Grid -->
         <section>
-            <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
-            <div id="promptsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">All Prompts</h2>
+                <span id="promptCount" class="text-gray-500 text-sm">Loading...</span>
+            </div>
+            <div id="promptsGrid" class="masonry-grid">
                 <!-- Prompt cards will be loaded here -->
+            </div>
+            <div id="emptyState" class="hidden text-center py-12">
+                <div class="text-gray-500 text-lg mb-4">No prompts found matching your criteria</div>
+                <button onclick="clearFilters()" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
+                    Clear Filters
+                </button>
             </div>
         </section>
     </main>
@@ -69,20 +97,20 @@
     <!-- AI Tools Button -->
     <div class="fixed bottom-4 right-4">
         <button onclick="showAITools()" 
-                class="bg-purple-600 text-white px-6 py-3 rounded-full shadow-lg hover:bg-purple-700">
+                class="bg-purple-600 text-white px-6 py-3 rounded-full shadow-lg hover:bg-purple-700 transition-transform">
             🛠️ AI Tools
         </button>
     </div>
 
     <!-- AI Tools Modal -->
-    <div id="aiToolsModal" class="hidden fixed inset-0 bg-black bg-opacity-50">
-        <div class="bg-white rounded-lg p-6 max-w-2xl mx-auto mt-20">
-            <div class="flex justify-between mb-4">
-                <h3 class="text-xl font-bold">Recommended AI Tools</h3>
-                <button onclick="hideAITools()" class="text-gray-500">×</button>
+    <div id="aiToolsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm">
+        <div class="bg-white rounded-lg p-6 max-w-2xl mx-auto mt-20 max-h-[80vh] overflow-y-auto">
+            <div class="flex justify-between mb-6">
+                <h3 class="text-xl font-bold">🛠️ Recommended AI Tools</h3>
+                <button onclick="hideAITools()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
             <div id="aiToolsList" class="space-y-4">
-                <!-- AI tools loaded from Firebase -->
+                <!-- AI tools loaded dynamically -->
             </div>
         </div>
     </div>
@@ -103,103 +131,159 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // DOM Elements
         const productInput = document.getElementById('productInput');
         const promptsGrid = document.getElementById('promptsGrid');
         const trendingPrompts = document.getElementById('trendingPrompts');
-        const aiToolsModal = document.getElementById('aiToolsModal');
-        const aiToolsList = document.getElementById('aiToolsList');
+        const searchInput = document.getElementById('searchInput');
+        const filterButtons = document.querySelectorAll('[id^="filter"]');
+        const promptCount = document.getElementById('promptCount');
+        const emptyState = document.getElementById('emptyState');
 
-        // Real-time Prompt Updater
-        productInput.addEventListener('input', () => {
+        // State
+        let allPrompts = [];
+        let currentFilter = 'all';
+        let currentSearch = '';
+
+        // Real-time Text Replacement
+        const updateAllPromptsText = () => {
             const value = productInput.value;
-            document.querySelectorAll('.prompt-text').forEach(element => {
+            document.querySelectorAll('.scrollable-text').forEach(element => {
                 const original = element.dataset.original;
-                element.innerHTML = original.replace(/<cust>/g, `<strong>${value}</strong>`);
+                if(original) {
+                    element.innerHTML = original.replace(/<cust>/g, `<strong>${value}</strong>`);
+                }
             });
-        });
+            document.querySelectorAll('.trending-prompt-text').forEach(element => {
+                const original = element.dataset.original;
+                if(original) {
+                    element.innerHTML = original.replace(/<cust>/g, `<strong>${value}</strong>`);
+                }
+            });
+        };
 
-        // Load Prompts in Real-Time
+        // Event Listeners
+        productInput.addEventListener('input', updateAllPromptsText);
+
+        // Firebase Data Handling
         onSnapshot(collection(db, "prompts"), (snapshot) => {
-            promptsGrid.innerHTML = "";
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const promptCard = `
-                    <div class="prompt-card bg-white rounded-xl p-6 shadow-md h-96 flex flex-col">
-                        <div class="flex-1">
-                            <h3 class="font-bold text-lg mb-2">${data.title}</h3>
-                            <div class="prompt-text scrollable-text text-gray-700 mb-4" data-original="${data.prompt}">
-                                ${data.prompt.replace(/<cust>/g, `<strong>${productInput.value || 'product'}</strong>`)}
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <button onclick="copyPrompt('${doc.id}', this)" 
-                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
-                                Copy Prompt
-                            </button>
-                            <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
-                        </div>
-                    </div>
-                `;
-                promptsGrid.insertAdjacentHTML('beforeend', promptCard);
+            allPrompts = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            renderPrompts();
+            updateAllPromptsText();
+        });
+
+        const renderPrompts = () => {
+            const filtered = allPrompts.filter(prompt => {
+                const matchesSearch = prompt.title.toLowerCase().includes(currentSearch) ||
+                                    prompt.prompt.toLowerCase().includes(currentSearch);
+                const matchesFilter = currentFilter === 'all' ? true : prompt.type === currentFilter;
+                return matchesSearch && matchesFilter;
             });
 
-            // Load Trending Prompts
-            const sortedPrompts = snapshot.docs.sort((a, b) => 
-                b.data().usedCount - a.data().usedCount
-            ).slice(0, 5);
+            promptCount.textContent = `${filtered.length} prompts found`;
+            emptyState.classList.toggle('hidden', filtered.length > 0);
+
+            // Main Prompts Grid
+            promptsGrid.innerHTML = filtered.map(prompt => `
+                <div class="prompt-card bg-white rounded-xl p-6 shadow-md mb-4">
+                    <div class="flex items-start justify-between mb-4">
+                        <span class="px-2 py-1 text-xs font-bold rounded ${
+                            prompt.type === 'image' ? 'bg-blue-100 text-blue-800' :
+                            prompt.type === 'video' ? 'bg-red-100 text-red-800' : 'bg-purple-100 text-purple-800'
+                        }">
+                            ${prompt.type.toUpperCase()}
+                        </span>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">${prompt.title}</h3>
+                    <div class="scrollable-text text-gray-700 mb-4" 
+                         data-original="${prompt.prompt.replace(/"/g, '&quot;')}">
+                        ${prompt.prompt.replace(/<cust>/g, `<strong>${productInput.value || 'product'}</strong>`)}
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <button onclick="copyPrompt('${prompt.id}', this)" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+                            Copy Prompt
+                        </button>
+                        <span class="text-gray-500 text-sm">📋 ${prompt.usedCount || 0}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            // Trending Prompts
+            const trending = [...allPrompts]
+                .sort((a, b) => b.usedCount - a.usedCount)
+                .slice(0, 5);
             
-            trendingPrompts.innerHTML = "";
-            sortedPrompts.forEach(doc => {
-                const trendingPrompt = `
-                    <div class="flex-shrink-0 w-64 bg-white p-4 rounded-lg shadow">
-                        <div class="truncate mb-2">${doc.data().title}</div>
-                        <div class="text-blue-500 text-sm">Used ${doc.data().usedCount} times</div>
+            trendingPrompts.innerHTML = trending.map(prompt => `
+                <div class="flex-shrink-0 w-72 bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="font-medium truncate">${prompt.title}</div>
+                        <span class="text-sm text-blue-500">${prompt.usedCount}</span>
                     </div>
-                `;
-                trendingPrompts.insertAdjacentHTML('beforeend', trendingPrompt);
+                    <div class="text-sm text-gray-600 line-clamp-2 trending-prompt-text" 
+                         data-original="${prompt.prompt.replace(/"/g, '&quot;')}">
+                        ${prompt.prompt.replace(/<cust>/g, `<strong>${productInput.value || 'product'}</strong>`)}
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Search and Filter Handlers
+        searchInput.addEventListener('input', (e) => {
+            currentSearch = e.target.value.toLowerCase();
+            renderPrompts();
+        });
+
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterButtons.forEach(b => b.classList.remove('bg-blue-100', 'text-blue-800'));
+                btn.classList.add('bg-blue-100', 'text-blue-800');
+                currentFilter = btn.id.replace('filter', '').toLowerCase();
+                renderPrompts();
             });
         });
 
-        // Load AI Tools in Real-Time
-        onSnapshot(collection(db, "aiTools"), (snapshot) => {
-            aiToolsList.innerHTML = "";
-            snapshot.forEach(doc => {
-                const tool = doc.data();
-                aiToolsList.innerHTML += `
-                    <div class="bg-white p-4 rounded-lg shadow">
-                        <h4 class="font-bold text-lg">${tool.title}</h4>
-                        <p class="text-gray-700 mb-2">${tool.description}</p>
-                        <a href="${tool.link}" target="_blank" class="text-blue-500 hover:text-blue-700">Visit Tool</a>
-                    </div>
-                `;
-            });
-        });
-
-        // Copy Prompt Function
+        // Copy Function
         window.copyPrompt = async (docId, button) => {
-            const promptText = button.parentElement.parentElement.querySelector('.prompt-text').textContent;
-            
+            const promptText = button.parentElement.parentElement.querySelector('.scrollable-text').textContent;
             try {
                 await navigator.clipboard.writeText(promptText);
                 await updateDoc(doc(db, "prompts", docId), {
                     usedCount: increment(1)
                 });
                 button.textContent = "Copied!";
-                setTimeout(() => {
-                    button.textContent = "Copy Prompt";
-                }, 2000);
+                setTimeout(() => button.textContent = "Copy Prompt", 2000);
             } catch (err) {
-                console.error('Failed to copy:', err);
+                console.error('Copy failed:', err);
             }
         };
 
         // AI Tools Modal
         window.showAITools = () => {
-            aiToolsModal.classList.remove('hidden');
+            document.getElementById('aiToolsModal').classList.remove('hidden');
         };
+        
         window.hideAITools = () => {
-            aiToolsModal.classList.add('hidden');
+            document.getElementById('aiToolsModal').classList.add('hidden');
         };
+
+        // Load AI Tools
+        onSnapshot(collection(db, "aiTools"), (snapshot) => {
+            const aiToolsList = document.getElementById('aiToolsList');
+            aiToolsList.innerHTML = snapshot.docs.map(doc => {
+                const tool = doc.data();
+                return `
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h4 class="font-bold text-lg">${tool.title}</h4>
+                        <p class="text-gray-700 mb-2">${tool.description}</p>
+                        <a href="${tool.link}" target="_blank" class="text-blue-500 hover:text-blue-700">Visit Tool</a>
+                    </div>
+                `;
+            }).join('');
+        });
     </script>
 </body>
 </html>
