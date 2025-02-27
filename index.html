@@ -17,13 +17,8 @@
             max-height: 150px;
             overflow-y: auto;
         }
-        .customize-pulse {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { border-color: #ddd; }
-            50% { border-color: #3B82F6; }
-            100% { border-color: #ddd; }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
@@ -34,8 +29,13 @@
             <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
             <div class="flex items-center gap-4">
                 <input type="text" id="searchInput" 
-                       class="w-64 px-4 py-2 border rounded-lg" 
+                       class="w-48 px-4 py-2 border rounded-lg" 
                        placeholder="Search prompts...">
+                <div class="flex items-center gap-1">
+                    <button data-filter="all" class="filter-btn active px-3 py-1 rounded-lg bg-blue-100 text-blue-800">All</button>
+                    <button data-filter="image" class="filter-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-600">📸 Image</button>
+                    <button data-filter="video" class="filter-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-600">🎥 Video</button>
+                </div>
             </div>
         </div>
     </header>
@@ -92,19 +92,6 @@
         </section>
     </main>
 
-    <!-- AI Tools Modal -->
-    <div id="aiToolsModal" class="hidden fixed inset-0 bg-black bg-opacity-50">
-        <div class="bg-white rounded-lg p-6 max-w-2xl mx-auto mt-20">
-            <div class="flex justify-between mb-4">
-                <h3 class="text-xl font-bold">Recommended AI Tools</h3>
-                <button onclick="hideAITools()" class="text-gray-500">×</button>
-            </div>
-            <div id="aiToolsList" class="space-y-4">
-                <!-- AI tools loaded from Firebase -->
-            </div>
-        </div>
-    </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
@@ -121,7 +108,14 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Customization Elements
+        // State Management
+        let allPrompts = [];
+        let currentSearch = '';
+        let currentFilter = 'all';
+
+        // DOM Elements
+        const searchInput = document.getElementById('searchInput');
+        const filterButtons = document.querySelectorAll('.filter-btn');
         const customFields = {
             obj: document.getElementById('customObject'),
             col: document.getElementById('customColor'),
@@ -129,20 +123,70 @@
             fx: document.getElementById('customEffect')
         };
 
-        // Dynamic Prompt Updater
-        function updateAllPrompts() {
+        // Real-time Updates
+        function updateUI() {
+            updateVisiblePrompts();
+            updateTrendingPrompts();
+            updateAllPromptsText();
+        }
+
+        // Filter System
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterButtons.forEach(b => {
+                    b.classList.remove('active', 'bg-blue-100', 'text-blue-800');
+                    b.classList.add('bg-gray-100', 'text-gray-600');
+                });
+                btn.classList.add('active', 'bg-blue-100', 'text-blue-800');
+                currentFilter = btn.dataset.filter;
+                updateUI();
+            });
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            currentSearch = e.target.value.toLowerCase();
+            updateUI();
+        });
+
+        function updateVisiblePrompts() {
+            document.querySelectorAll('.prompt-card').forEach(card => {
+                const matchesSearch = card.dataset.title.includes(currentSearch);
+                const matchesFilter = currentFilter === 'all' || card.dataset.type === currentFilter;
+                card.classList.toggle('hidden', !(matchesSearch && matchesFilter));
+            });
+        }
+
+        // Trending Prompts (Top 6)
+        function updateTrendingPrompts() {
+            const trending = [...allPrompts]
+                .sort((a, b) => (b.usedCount || 0) - (a.usedCount || 0))
+                .slice(0, 6);
+
+            const trendingPrompts = document.getElementById('trendingPrompts');
+            trendingPrompts.innerHTML = trending.map(prompt => `
+                <div class="flex-shrink-0 w-72 bg-white p-4 rounded-lg shadow-md">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="font-medium truncate">${prompt.title}</div>
+                        <span class="text-sm text-blue-500">${prompt.usedCount || 0}</span>
+                    </div>
+                    <div class="text-sm text-gray-600 line-clamp-2">${prompt.prompt}</div>
+                </div>
+            `).join('');
+        }
+
+        // Custom Text Replacement
+        function updateAllPromptsText() {
             const values = {
-                obj: customFields.obj.value || "product",
-                col: customFields.col.value || "glossy",
-                loc: customFields.loc.value || "urban environment",
-                fx: customFields.fx.value || "dynamic effects",
-                cust: document.getElementById('productInput')?.value || "product"
+                obj: customFields.obj.value,
+                col: customFields.col.value,
+                loc: customFields.loc.value,
+                fx: customFields.fx.value
             };
 
             document.querySelectorAll('.prompt-text').forEach(element => {
                 let content = element.dataset.original;
                 for(const [tag, value] of Object.entries(values)) {
-                    content = content.replace(new RegExp(`<${tag}>`, 'gi'), `<strong>${value}</strong>`);
+                    if(value) content = content.replace(new RegExp(`<${tag}>`, 'gi'), `<strong>${value}</strong>`);
                 }
                 element.innerHTML = content;
             });
@@ -150,46 +194,49 @@
 
         // Event Listeners for Customization
         Object.values(customFields).forEach(field => {
-            field.addEventListener('input', updateAllPrompts);
+            field.addEventListener('input', () => {
+                updateAllPromptsText();
+            });
         });
 
-        // Load Prompts
+        // Firebase Data Handling
         onSnapshot(collection(db, "prompts"), (snapshot) => {
-            const promptsGrid = document.getElementById('promptsGrid');
-            promptsGrid.innerHTML = "";
+            allPrompts = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                titleLower: doc.data().title.toLowerCase()
+            }));
             
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const originalPrompt = data.prompt;
-                
-                const promptCard = `
-                    <div class="prompt-card bg-white rounded-xl p-6 shadow-md">
-                        <div class="flex items-center justify-between mb-4">
-                            <span class="px-2 py-1 text-xs font-bold rounded ${
-                                data.type === 'image' ? 'bg-blue-100 text-blue-800' :
-                                data.type === 'video' ? 'bg-red-100 text-red-800' : 'bg-purple-100 text-purple-800'
-                            }">
-                                ${data.type.toUpperCase()}
-                            </span>
-                        </div>
-                        <h3 class="font-bold text-lg mb-2">${data.title}</h3>
-                        <div class="scrollable-text prompt-text text-gray-700 mb-4" 
-                             data-original="${originalPrompt.replace(/"/g, '&quot;')}">
-                            ${originalPrompt.replace(/<cust>/g, '<strong>product</strong>')}
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <button onclick="copyPrompt('${doc.id}', this)" 
-                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                Copy Prompt
-                            </button>
-                            <span class="text-gray-500 text-sm">📋 ${data.usedCount || 0}</span>
-                        </div>
+            // Update Prompts Grid
+            const promptsGrid = document.getElementById('promptsGrid');
+            promptsGrid.innerHTML = allPrompts.map(prompt => `
+                <div class="prompt-card bg-white rounded-xl p-6 shadow-md" 
+                     data-type="${prompt.type}" 
+                     data-title="${prompt.titleLower}">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="px-2 py-1 text-xs font-bold rounded ${
+                            prompt.type === 'image' ? 'bg-blue-100 text-blue-800' :
+                            prompt.type === 'video' ? 'bg-red-100 text-red-800' : 'bg-purple-100 text-purple-800'
+                        }">
+                            ${prompt.type.toUpperCase()}
+                        </span>
                     </div>
-                `;
-                
-                promptsGrid.insertAdjacentHTML('beforeend', promptCard);
-            });
-            updateAllPrompts(); // Initial update
+                    <h3 class="font-bold text-lg mb-2">${prompt.title}</h3>
+                    <div class="scrollable-text prompt-text text-gray-700 mb-4" 
+                         data-original="${prompt.prompt.replace(/"/g, '&quot;')}">
+                        ${prompt.prompt}
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <button onclick="copyPrompt('${prompt.id}', this)" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                            Copy Prompt
+                        </button>
+                        <span class="text-gray-500 text-sm">📋 ${prompt.usedCount || 0}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            updateUI();
         });
 
         // Copy Function
@@ -206,29 +253,6 @@
                 console.error('Copy failed:', err);
             }
         };
-
-        // AI Tools Modal
-        window.showAITools = () => {
-            document.getElementById('aiToolsModal').classList.remove('hidden');
-        };
-        window.hideAITools = () => {
-            document.getElementById('aiToolsModal').classList.add('hidden');
-        };
-
-        // Load AI Tools
-        onSnapshot(collection(db, "aiTools"), (snapshot) => {
-            const aiToolsList = document.getElementById('aiToolsList');
-            aiToolsList.innerHTML = snapshot.docs.map(doc => {
-                const tool = doc.data();
-                return `
-                    <div class="bg-white p-4 rounded-lg shadow">
-                        <h4 class="font-bold text-lg">${tool.title}</h4>
-                        <p class="text-gray-700 mb-2">${tool.description}</p>
-                        <a href="${tool.link}" target="_blank" class="text-blue-500 hover:text-blue-700">Visit Tool</a>
-                    </div>
-                `;
-            }).join('');
-        });
     </script>
 </body>
 </html>
