@@ -3,76 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PromptCook Admin</title>
+    <title>Admin - Add AI Prompts</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        .prompt-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .prompt-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-    </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-            <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
-            <h1 class="text-3xl font-bold text-blue-600">PromptCook Admin</h1>
-            <a href="https://instagram.com/yourprofile" target="_blank" class="text-blue-600 hover:text-blue-800">
-                <svg class="w-8 h-8"><!-- Instagram icon SVG --></svg>
-            </a>
-        </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 py-8">
-        <!-- CSV Upload Section -->
-        <section class="mb-8 p-6 bg-white rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Bulk Upload Prompts (CSV)</h2>
-            <form id="bulkUploadForm">
-                <input type="file" id="csvFile" accept=".csv" class="w-full p-3 border rounded-lg mb-4" required>
-                <div class="mb-4 text-sm text-gray-600">
-                    CSV Format: Title, Type (image/video/both), Prompt (use &lt;cust&gt;)
-                </div>
-                <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-                    Upload CSV
-                </button>
-                <div id="uploadStatus" class="mt-4"></div>
-            </form>
-        </section>
+    <h1 class="text-center text-3xl font-bold mt-6 text-blue-600">Admin - Add AI Prompt</h1>
 
-        <!-- Add New Prompt Form -->
-        <section class="mb-8 p-6 bg-white rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Add New Prompt</h2>
-            <form id="addPromptForm">
-                <input type="text" id="promptTitle" placeholder="Title" class="w-full p-3 border rounded-lg mb-4" required>
-                <select id="promptType" class="w-full p-3 border rounded-lg mb-4">
-                    <option value="image">Image</option>
-                    <option value="video">Video</option>
-                    <option value="both">Both</option>
-                </select>
-                <textarea id="promptText" rows="4" placeholder="Prompt Text (use <cust> for customization)" class="w-full p-3 border rounded-lg mb-4" required></textarea>
-                <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-                    Add Prompt
-                </button>
-            </form>
-        </section>
+    <div class="max-w-2xl mx-auto mt-6 p-6 bg-white shadow-lg rounded-lg">
+        <input type="text" id="promptTitle" placeholder="Title" class="w-full p-3 border rounded-lg mb-4">
+        <textarea id="promptText" rows="4" placeholder="Prompt with placeholders (e.g. A <product> on a <place> at <time>)" class="w-full p-3 border rounded-lg mb-4"></textarea>
+        <input type="text" id="tags" placeholder="Enter tags (comma separated, e.g. product,place,time)" class="w-full p-3 border rounded-lg mb-4">
+        <button onclick="uploadPrompt()" class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg">Submit</button>
+    </div>
 
-        <!-- Prompts List -->
-        <section>
-            <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
-            <div id="promptsList" class="space-y-4"></div>
-        </section>
-    </main>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-        import { default as Papa } from "https://cdn.jsdelivr.net/npm/papaparse@5.3.2/+esm";
-
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
             authDomain: "promptcook.firebaseapp.com",
@@ -82,294 +29,26 @@
             appId: "1:629727878561:web:a20882f86dad45e7a6bfe0"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-        // CSV Upload Handling
-        const bulkUploadForm = document.getElementById('bulkUploadForm');
-        const uploadStatus = document.getElementById('uploadStatus');
+        function uploadPrompt() {
+            let title = document.getElementById("promptTitle").value;
+            let promptText = document.getElementById("promptText").value;
+            let tags = document.getElementById("tags").value.split(",").map(tag => tag.trim());
 
-        bulkUploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const file = document.getElementById('csvFile').files[0];
-            
-            uploadStatus.innerHTML = '<div class="text-blue-600">Processing CSV file...</div>';
-            uploadStatus.classList.remove('hidden');
-
-            try {
-                const results = await new Promise((resolve, reject) => {
-                    Papa.parse(file, {
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: resolve,
-                        error: reject
-                    });
-                });
-
-                const validRows = results.data.filter(row => 
-                    row.Title && row.Type && row.Prompt && row.Prompt.includes('<cust>')
-                );
-
-                const promises = validRows.map(row => 
-                    addDoc(collection(db, "prompts"), {
-                        title: row.Title.trim(),
-                        type: row.Type.toLowerCase(),
-                        prompt: row.Prompt.trim(),
-                        usedCount: 0,
-                        createdAt: new Date()
-                    })
-                );
-
-                await Promise.all(promises);
-                uploadStatus.innerHTML = `<div class="text-green-600">✅ Uploaded ${validRows.length} prompts successfully!</div>`;
-            } catch (error) {
-                uploadStatus.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
-            } finally {
-                bulkUploadForm.reset();
-                setTimeout(() => uploadStatus.classList.add('hidden'), 5000);
-            }
-        });
-
-        // Add New Prompt
-        const addPromptForm = document.getElementById('addPromptForm');
-        addPromptForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const title = document.getElementById('promptTitle').value;
-            const type = document.getElementById('promptType').value;
-            const promptText = document.getElementById('promptText').value;
-
-            try {
-                await addDoc(collection(db, "prompts"), { 
-                    title, 
-                    type, 
-                    prompt: promptText, 
-                    usedCount: 0 
-                });
-                addPromptForm.reset();
+            db.collection("prompts").add({
+                title: title,
+                prompt: promptText,
+                tags: tags
+            }).then(() => {
                 alert("Prompt added successfully!");
-            } catch (error) {
-                alert("Error adding prompt: " + error.message);
-            }
-        });
-
-        // Display Prompts
-        const promptsList = document.getElementById('promptsList');
-        onSnapshot(collection(db, "prompts"), (snapshot) => {
-            promptsList.innerHTML = "";
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                promptsList.innerHTML += `
-                    <div class="bg-white p-6 rounded-lg shadow-md prompt-card">
-                        <h3 class="font-bold text-lg mb-2">${data.title}</h3>
-                        <p class="text-gray-700 mb-4">${data.prompt.replace(/<cust>/g, '<strong><cust></strong>')}</p>
-                        <div class="flex justify-between items-center">
-                            <button onclick="deletePrompt('${doc.id}')" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
-                                Delete
-                            </button>
-                            <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
-                        </div>
-                    </div>
-                `;
+                document.getElementById("promptTitle").value = "";
+                document.getElementById("promptText").value = "";
+                document.getElementById("tags").value = "";
             });
-        });
-
-        // Delete Prompt
-        window.deletePrompt = async (docId) => {
-            if (confirm("Delete this prompt permanently?")) {
-                try {
-                    await deleteDoc(doc(db, "prompts", docId));
-                } catch (error) {
-                    alert("Delete failed: " + error.message);
-                }
-            }
-        };
-    </script>
-</body>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PromptCook Admin</title>
-    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        .prompt-card {
-            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .prompt-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-    </style>
-</head>
-<body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-            <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
-            <h1 class="text-3xl font-bold text-blue-600">PromptCook Admin</h1>
-            <a href="https://instagram.com/yourprofile" target="_blank" class="text-blue-600 hover:text-blue-800">
-                <svg class="w-8 h-8"><!-- Instagram icon SVG --></svg>
-            </a>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 py-8">
-        <!-- CSV Upload Section -->
-        <section class="mb-8 p-6 bg-white rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Bulk Upload Prompts (CSV)</h2>
-            <form id="bulkUploadForm">
-                <input type="file" id="csvFile" accept=".csv" class="w-full p-3 border rounded-lg mb-4" required>
-                <div class="mb-4 text-sm text-gray-600">
-                    CSV Format: Title, Type (image/video/both), Prompt (use &lt;cust&gt;)
-                </div>
-                <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-                    Upload CSV
-                </button>
-                <div id="uploadStatus" class="mt-4"></div>
-            </form>
-        </section>
-
-        <!-- Add New Prompt Form -->
-        <section class="mb-8 p-6 bg-white rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">Add New Prompt</h2>
-            <form id="addPromptForm">
-                <input type="text" id="promptTitle" placeholder="Title" class="w-full p-3 border rounded-lg mb-4" required>
-                <select id="promptType" class="w-full p-3 border rounded-lg mb-4">
-                    <option value="image">Image</option>
-                    <option value="video">Video</option>
-                    <option value="both">Both</option>
-                </select>
-                <textarea id="promptText" rows="4" placeholder="Prompt Text (use <cust> for customization)" class="w-full p-3 border rounded-lg mb-4" required></textarea>
-                <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-                    Add Prompt
-                </button>
-            </form>
-        </section>
-
-        <!-- Prompts List -->
-        <section>
-            <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
-            <div id="promptsList" class="space-y-4"></div>
-        </section>
-    </main>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-        import { default as Papa } from "https://cdn.jsdelivr.net/npm/papaparse@5.3.2/+esm";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
-            authDomain: "promptcook.firebaseapp.com",
-            projectId: "promptcook",
-            storageBucket: "promptcook.appspot.com",
-            messagingSenderId: "629727878561",
-            appId: "1:629727878561:web:a20882f86dad45e7a6bfe0"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        // CSV Upload Handling
-        const bulkUploadForm = document.getElementById('bulkUploadForm');
-        const uploadStatus = document.getElementById('uploadStatus');
-
-        bulkUploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const file = document.getElementById('csvFile').files[0];
-            
-            uploadStatus.innerHTML = '<div class="text-blue-600">Processing CSV file...</div>';
-            uploadStatus.classList.remove('hidden');
-
-            try {
-                const results = await new Promise((resolve, reject) => {
-                    Papa.parse(file, {
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: resolve,
-                        error: reject
-                    });
-                });
-
-                const validRows = results.data.filter(row => 
-                    row.Title && row.Type && row.Prompt && row.Prompt.includes('<cust>')
-                );
-
-                const promises = validRows.map(row => 
-                    addDoc(collection(db, "prompts"), {
-                        title: row.Title.trim(),
-                        type: row.Type.toLowerCase(),
-                        prompt: row.Prompt.trim(),
-                        usedCount: 0,
-                        createdAt: new Date()
-                    })
-                );
-
-                await Promise.all(promises);
-                uploadStatus.innerHTML = `<div class="text-green-600">✅ Uploaded ${validRows.length} prompts successfully!</div>`;
-            } catch (error) {
-                uploadStatus.innerHTML = `<div class="text-red-600">❌ Error: ${error.message}</div>`;
-            } finally {
-                bulkUploadForm.reset();
-                setTimeout(() => uploadStatus.classList.add('hidden'), 5000);
-            }
-        });
-
-        // Add New Prompt
-        const addPromptForm = document.getElementById('addPromptForm');
-        addPromptForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const title = document.getElementById('promptTitle').value;
-            const type = document.getElementById('promptType').value;
-            const promptText = document.getElementById('promptText').value;
-
-            try {
-                await addDoc(collection(db, "prompts"), { 
-                    title, 
-                    type, 
-                    prompt: promptText, 
-                    usedCount: 0 
-                });
-                addPromptForm.reset();
-                alert("Prompt added successfully!");
-            } catch (error) {
-                alert("Error adding prompt: " + error.message);
-            }
-        });
-
-        // Display Prompts
-        const promptsList = document.getElementById('promptsList');
-        onSnapshot(collection(db, "prompts"), (snapshot) => {
-            promptsList.innerHTML = "";
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                promptsList.innerHTML += `
-                    <div class="bg-white p-6 rounded-lg shadow-md prompt-card">
-                        <h3 class="font-bold text-lg mb-2">${data.title}</h3>
-                        <p class="text-gray-700 mb-4">${data.prompt.replace(/<cust>/g, '<strong><cust></strong>')}</p>
-                        <div class="flex justify-between items-center">
-                            <button onclick="deletePrompt('${doc.id}')" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
-                                Delete
-                            </button>
-                            <span class="text-gray-500 text-sm">Used ${data.usedCount || 0} times</span>
-                        </div>
-                    </div>
-                `;
-            });
-        });
-
-        // Delete Prompt
-        window.deletePrompt = async (docId) => {
-            if (confirm("Delete this prompt permanently?")) {
-                try {
-                    await deleteDoc(doc(db, "prompts", docId));
-                } catch (error) {
-                    alert("Delete failed: " + error.message);
-                }
-            }
-        };
     </script>
+
 </body>
 </html>
