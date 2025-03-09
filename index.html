@@ -3,99 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PromptCook - AI Prompts Marketplace</title>
+    <title>AI Mockup Prompt Generator</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        .prompt-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .prompt-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        .scrollable-text {
-            max-height: 150px;
-            overflow-y: auto;
-        }
-        .hidden {
-            display: none;
-        }
-    </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-            <img src="logo.png" class="h-12 w-auto" alt="PromptCook Logo">
-            <div class="flex items-center gap-4">
-                <input type="text" id="searchInput" 
-                       class="w-48 px-4 py-2 border rounded-lg" 
-                       placeholder="Search prompts...">
-                <div class="flex items-center gap-1">
-                    <button data-filter="all" class="filter-btn active px-3 py-1 rounded-lg bg-blue-100 text-blue-800">All</button>
-                    <button data-filter="image" class="filter-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-600">📸 Image</button>
-                    <button data-filter="video" class="filter-btn px-3 py-1 rounded-lg bg-gray-100 text-gray-600">🎥 Video</button>
-                </div>
-            </div>
-        </div>
-    </header>
 
-    <!-- Customization Panel -->
-    <div class="max-w-7xl mx-auto px-4 py-6">
-        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h2 class="text-xl font-semibold mb-4">Advanced Customization</h2>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-sm font-medium mb-2">Object (<obj>)</label>
-                    <input type="text" id="customObject" 
-                           class="w-full p-2 border rounded-lg" 
-                           placeholder="e.g., Smartphone">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2">Color (<col>)</label>
-                    <input type="text" id="customColor" 
-                           class="w-full p-2 border rounded-lg" 
-                           placeholder="e.g., Metallic Gold">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2">Location (<loc>)</label>
-                    <input type="text" id="customLocation" 
-                           class="w-full p-2 border rounded-lg" 
-                           placeholder="e.g., Tokyo Streets">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2">Effect (<fx>)</label>
-                    <input type="text" id="customEffect" 
-                           class="w-full p-2 border rounded-lg" 
-                           placeholder="e.g., Glowing Particles">
-                </div>
-            </div>
-        </div>
+    <h1 class="text-center text-3xl font-bold mt-6 text-blue-600">AI Mockup Prompt Generator</h1>
+
+    <div class="max-w-4xl mx-auto mt-6">
+        <div id="promptContainer"></div>
     </div>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Trending Section -->
-        <section class="mb-12">
-            <h2 class="text-2xl font-bold mb-6">🔥 Trending Prompts</h2>
-            <div id="trendingPrompts" class="flex overflow-x-auto gap-4 pb-4">
-                <!-- Trending prompts loaded dynamically -->
-            </div>
-        </section>
-
-        <!-- All Prompts Grid -->
-        <section>
-            <h2 class="text-2xl font-bold mb-6">All Prompts</h2>
-            <div id="promptsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Prompt cards loaded dynamically -->
-            </div>
-        </section>
-    </main>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
-
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
             authDomain: "promptcook.firebaseapp.com",
@@ -105,154 +26,68 @@
             appId: "1:629727878561:web:a20882f86dad45e7a6bfe0"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-        // State Management
-        let allPrompts = [];
-        let currentSearch = '';
-        let currentFilter = 'all';
-
-        // DOM Elements
-        const searchInput = document.getElementById('searchInput');
-        const filterButtons = document.querySelectorAll('.filter-btn');
-        const customFields = {
-            obj: document.getElementById('customObject'),
-            col: document.getElementById('customColor'),
-            loc: document.getElementById('customLocation'),
-            fx: document.getElementById('customEffect')
-        };
-
-        // Real-time Updates
-        function updateUI() {
-            updateVisiblePrompts();
-            updateTrendingPrompts();
-            updateAllPromptsText();
-        }
-
-        // Filter System
-        filterButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                filterButtons.forEach(b => {
-                    b.classList.remove('active', 'bg-blue-100', 'text-blue-800');
-                    b.classList.add('bg-gray-100', 'text-gray-600');
+        function fetchPrompts() {
+            db.collection("prompts").get().then(snapshot => {
+                snapshot.forEach(doc => {
+                    let data = doc.data();
+                    renderPromptCard(doc.id, data.prompt, data.tags);
                 });
-                btn.classList.add('active', 'bg-blue-100', 'text-blue-800');
-                currentFilter = btn.dataset.filter;
-                updateUI();
-            });
-        });
-
-        searchInput.addEventListener('input', (e) => {
-            currentSearch = e.target.value.toLowerCase();
-            updateUI();
-        });
-
-        function updateVisiblePrompts() {
-            document.querySelectorAll('.prompt-card').forEach(card => {
-                const matchesSearch = card.dataset.title.includes(currentSearch);
-                const matchesFilter = currentFilter === 'all' || card.dataset.type === currentFilter;
-                card.classList.toggle('hidden', !(matchesSearch && matchesFilter));
             });
         }
 
-        // Trending Prompts (Top 6)
-        function updateTrendingPrompts() {
-            const trending = [...allPrompts]
-                .sort((a, b) => (b.usedCount || 0) - (a.usedCount || 0))
-                .slice(0, 6);
-
-            const trendingPrompts = document.getElementById('trendingPrompts');
-            trendingPrompts.innerHTML = trending.map(prompt => `
-                <div class="flex-shrink-0 w-72 bg-white p-4 rounded-lg shadow-md">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="font-medium truncate">${prompt.title}</div>
-                        <span class="text-sm text-blue-500">${prompt.usedCount || 0}</span>
-                    </div>
-                    <div class="text-sm text-gray-600 line-clamp-2">${prompt.prompt}</div>
-                </div>
-            `).join('');
-        }
-
-        // Custom Text Replacement
-        function updateAllPromptsText() {
-            const values = {
-                obj: customFields.obj.value,
-                col: customFields.col.value,
-                loc: customFields.loc.value,
-                fx: customFields.fx.value
-            };
-
-            document.querySelectorAll('.prompt-text').forEach(element => {
-                let content = element.dataset.original;
-                for(const [tag, value] of Object.entries(values)) {
-                    if(value) content = content.replace(new RegExp(`<${tag}>`, 'gi'), `<strong>${value}</strong>`);
-                }
-                element.innerHTML = content;
-            });
-        }
-
-        // Event Listeners for Customization
-        Object.values(customFields).forEach(field => {
-            field.addEventListener('input', () => {
-                updateAllPromptsText();
-            });
-        });
-
-        // Firebase Data Handling
-        onSnapshot(collection(db, "prompts"), (snapshot) => {
-            allPrompts = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                titleLower: doc.data().title.toLowerCase()
-            }));
+        function renderPromptCard(id, prompt, tags) {
+            let container = document.getElementById("promptContainer");
+            let card = document.createElement("div");
+            card.className = "prompt-card bg-white p-6 rounded-lg shadow-lg mt-4";
             
-            // Update Prompts Grid
-            const promptsGrid = document.getElementById('promptsGrid');
-            promptsGrid.innerHTML = allPrompts.map(prompt => `
-                <div class="prompt-card bg-white rounded-xl p-6 shadow-md" 
-                     data-type="${prompt.type}" 
-                     data-title="${prompt.titleLower}">
-                    <div class="flex items-center justify-between mb-4">
-                        <span class="px-2 py-1 text-xs font-bold rounded ${
-                            prompt.type === 'image' ? 'bg-blue-100 text-blue-800' :
-                            prompt.type === 'video' ? 'bg-red-100 text-red-800' : 'bg-purple-100 text-purple-800'
-                        }">
-                            ${prompt.type.toUpperCase()}
-                        </span>
-                    </div>
-                    <h3 class="font-bold text-lg mb-2">${prompt.title}</h3>
-                    <div class="scrollable-text prompt-text text-gray-700 mb-4" 
-                         data-original="${prompt.prompt.replace(/"/g, '&quot;')}">
-                        ${prompt.prompt}
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <button onclick="copyPrompt('${prompt.id}', this)" 
-                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                            Copy Prompt
-                        </button>
-                        <span class="text-gray-500 text-sm">📋 ${prompt.usedCount || 0}</span>
-                    </div>
-                </div>
-            `).join('');
+            let inputsHTML = "";
+            let updatedPrompt = prompt;
 
-            updateUI();
-        });
+            tags.forEach(tag => {
+                let regex = new RegExp(`<${tag}>(.*?)<\/${tag}>`, "g");
+                let match = regex.exec(prompt);
+                let defaultValue = match ? match[1] : "";
 
-        // Copy Function
-        window.copyPrompt = async (docId, button) => {
-            const promptText = button.parentElement.parentElement.querySelector('.prompt-text').textContent;
-            try {
-                await navigator.clipboard.writeText(promptText);
-                await updateDoc(doc(db, "prompts", docId), {
-                    usedCount: increment(1)
-                });
-                button.textContent = "Copied!";
-                setTimeout(() => button.textContent = "Copy Prompt", 2000);
-            } catch (err) {
-                console.error('Copy failed:', err);
-            }
-        };
+                inputsHTML += `
+                    <label class="block font-semibold text-gray-600 mt-2">${tag.charAt(0).toUpperCase() + tag.slice(1)}</label>
+                    <input type="text" data-tag="${tag}" value="${defaultValue}" 
+                        oninput="updatePrompt('${id}', this)"
+                        class="w-full p-2 border rounded-lg mt-1">
+                `;
+            });
+
+            card.innerHTML = `
+                <p id="prompt-${id}" class="text-gray-800 text-lg mb-4">${updatedPrompt}</p>
+                ${inputsHTML}
+                <button onclick="copyToClipboard('${id}')" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg">
+                    Copy Prompt
+                </button>
+            `;
+            container.appendChild(card);
+        }
+
+        function updatePrompt(id, input) {
+            let tag = input.getAttribute("data-tag");
+            let newValue = input.value || `<${tag}>`; 
+            let promptText = document.getElementById(`prompt-${id}`).innerText;
+
+            let regex = new RegExp(`<${tag}>(.*?)<\/${tag}>`, "g");
+            let updatedText = promptText.replace(regex, `<${tag}>${newValue}</${tag}>`);
+
+            document.getElementById(`prompt-${id}`).innerText = updatedText;
+        }
+
+        function copyToClipboard(id) {
+            let text = document.getElementById(`prompt-${id}`).innerText;
+            navigator.clipboard.writeText(text);
+            alert("Copied to clipboard!");
+        }
+
+        fetchPrompts();
     </script>
+
 </body>
 </html>
