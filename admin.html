@@ -1,65 +1,110 @@
+<!-- admin.html - AI Prompt Generator Admin Panel -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - AI Prompt Generator</title>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
-    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-50">
 
-    <h1 class="text-center text-3xl font-bold mt-6 text-blue-600">Admin - Add AI Prompt</h1>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
 
-    <div class="max-w-2xl mx-auto mt-6 p-6 bg-white shadow-lg rounded-lg">
-        <input type="text" id="promptTitle" placeholder="Title" class="w-full p-3 border rounded-lg mb-4">
-        <textarea id="promptText" rows="4" placeholder="Prompt with placeholders (e.g. A <product> on a <place> at <time>)" class="w-full p-3 border rounded-lg mb-4"></textarea>
-        <input type="text" id="tags" placeholder="Enter tags (comma separated, e.g. product,place,time)" class="w-full p-3 border rounded-lg mb-4">
-        <button onclick="uploadPrompt()" class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg">Submit</button>
-    </div>
-
-    <script>
-        // ✅ Initialize Firebase properly
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
             authDomain: "promptcook.firebaseapp.com",
             projectId: "promptcook",
-            storageBucket: "promptcook.appspot.com",
+            storageBucket: "promptcook.firebasestorage.app",
             messagingSenderId: "629727878561",
-            appId: "1:629727878561:web:a20882f86dad45e7a6bfe0"
+            appId: "1:629727878561:web:a20882f86dad45e7a6bfe0",
+            measurementId: "G-67BF4MEK2T"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
 
-        // ✅ Function to upload prompt to Firestore
-        function uploadPrompt() {
-            let title = document.getElementById("promptTitle").value.trim();
-            let promptText = document.getElementById("promptText").value.trim();
-            let tags = document.getElementById("tags").value.split(",").map(tag => tag.trim());
+        document.addEventListener("DOMContentLoaded", function () {
+            document.getElementById("addPromptButton").addEventListener("click", async function () {
+                let title = document.getElementById("promptTitle").value.trim();
+                let promptText = document.getElementById("promptText").value.trim();
+                let tags = document.getElementById("tags").value.split(",").map(tag => tag.trim());
 
-            if (!title || !promptText || tags.length === 0) {
-                alert("Please fill out all fields.");
-                return;
+                if (!title || !promptText || tags.length === 0) {
+                    alert("Please fill out all fields.");
+                    return;
+                }
+
+                try {
+                    await addDoc(collection(db, "prompts"), {
+                        title: title,
+                        prompt: promptText,
+                        tags: tags,
+                        createdAt: new Date()
+                    });
+                    alert("✅ Prompt added successfully!");
+                    document.getElementById("promptTitle").value = "";
+                    document.getElementById("promptText").value = "";
+                    document.getElementById("tags").value = "";
+                } catch (error) {
+                    console.error("Error adding prompt: ", error);
+                }
+            });
+
+            function renderPrompts() {
+                onSnapshot(collection(db, "prompts"), snapshot => {
+                    let html = "";
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const tags = Array.isArray(data.tags) ? data.tags : [];
+                        html += `
+                            <div class="p-4 bg-gray-100 rounded-lg shadow">
+                                <h3 class="font-bold text-lg">${data.title}</h3>
+                                <p class="text-gray-700">${data.prompt}</p>
+                                <small class="text-gray-500">Tags: ${tags.join(", ")}</small>
+                                <div class="mt-3">
+                                    <button onclick="deletePrompt('${docSnap.id}')" class="bg-red-500 text-white px-3 py-1 rounded">Delete</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById("promptsList").innerHTML = html;
+                });
             }
 
-            db.collection("prompts").add({
-                title: title,
-                prompt: promptText,
-                tags: tags,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(() => {
-                alert("Prompt added successfully!");
-                document.getElementById("promptTitle").value = "";
-                document.getElementById("promptText").value = "";
-                document.getElementById("tags").value = "";
-            }).catch(error => {
-                console.error("Error adding prompt:", error);
-                alert("Error adding prompt. Check console.");
-            });
-        }
+            window.deletePrompt = async function (id) {
+                if (confirm("Delete this prompt?")) {
+                    try {
+                        await deleteDoc(doc(db, "prompts", id));
+                    } catch (error) {
+                        console.error("Error deleting prompt: ", error);
+                    }
+                }
+            };
+
+            renderPrompts();
+        });
     </script>
 
+    <!-- TailwindCSS for styling -->
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50">
+
+    <h1 class="text-center text-3xl font-bold mt-6 text-blue-600">Admin - Manage AI Prompts</h1>
+
+    <div class="max-w-2xl mx-auto mt-6 p-6 bg-white shadow-lg rounded-lg">
+        <input type="text" id="promptTitle" placeholder="Prompt Title" class="w-full p-3 border rounded-lg mb-4">
+        <textarea id="promptText" rows="4" placeholder="Prompt (Use <product>, <place>, <time>)" class="w-full p-3 border rounded-lg mb-4"></textarea>
+        <input type="text" id="tags" placeholder="Tags (comma-separated, e.g., product,place,time)" class="w-full p-3 border rounded-lg mb-4">
+        <button id="addPromptButton" class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg">Add Prompt</button>
+    </div>
+
+    <div class="max-w-2xl mx-auto mt-6 p-6 bg-white shadow-lg rounded-lg">
+        <h2 class="text-xl font-bold mb-4">📋 All Prompts</h2>
+        <div id="promptsList" class="space-y-4"></div>
+    </div>
 </body>
 </html>
