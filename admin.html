@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Add AI Prompts</title>
+    <title>Admin - AI Prompt Generator</title>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
@@ -20,6 +20,7 @@
     </div>
 
     <script>
+        // ✅ Initialize Firebase properly
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
             authDomain: "promptcook.firebaseapp.com",
@@ -32,20 +33,30 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
+        // ✅ Function to upload prompt to Firestore
         function uploadPrompt() {
-            let title = document.getElementById("promptTitle").value;
-            let promptText = document.getElementById("promptText").value;
+            let title = document.getElementById("promptTitle").value.trim();
+            let promptText = document.getElementById("promptText").value.trim();
             let tags = document.getElementById("tags").value.split(",").map(tag => tag.trim());
+
+            if (!title || !promptText || tags.length === 0) {
+                alert("Please fill out all fields.");
+                return;
+            }
 
             db.collection("prompts").add({
                 title: title,
                 prompt: promptText,
-                tags: tags
+                tags: tags,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
             }).then(() => {
                 alert("Prompt added successfully!");
                 document.getElementById("promptTitle").value = "";
                 document.getElementById("promptText").value = "";
                 document.getElementById("tags").value = "";
+            }).catch(error => {
+                console.error("Error adding prompt:", error);
+                alert("Error adding prompt. Check console.");
             });
         }
     </script>
