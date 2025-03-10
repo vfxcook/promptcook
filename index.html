@@ -3,92 +3,800 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Mockup Prompt Generator</title>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+    <title>AI Prompt Generator - Create Custom Images</title>
+
+    <!-- TailwindCSS for styling -->
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-50">
+    
+    <!-- Additional Custom Styles -->
+    <style>
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gradient 6s ease infinite;
+            background-size: 300% 300%;
+        }
+        
+        @keyframes gradient {
+            0% {background-position: 0% 50%}
+            50% {background-position: 100% 50%}
+            100% {background-position: 0% 50%}
+        }
+        
+        .prompt-card {
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .prompt-card:hover {
+            box-shadow: 0 0 25px rgba(79, 70, 229, 0.4);
+            transform: translateY(-5px);
+        }
+        
+        .prompt-input {
+            transition: all 0.2s ease;
+        }
+        
+        .prompt-input:focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
+            outline: none;
+        }
+        
+        .copy-button {
+            transition: all 0.2s ease;
+        }
+        
+        .copy-button:hover {
+            transform: scale(1.05);
+        }
+        
+        .tag-highlight {
+            color: #8b5cf6;
+            font-weight: 600;
+        }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            .prompt-card {
+                padding: 1rem;
+            }
+            .trending-card {
+                padding: 0.75rem;
+            }
+            .gradient-text {
+                font-size: 2rem;
+            }
+        }
+        
+        /* Alert styles */
+        .alert {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            z-index: 50;
+            animation: slide-in 0.3s ease-out, fade-out 0.5s ease-in 2.5s forwards;
+            max-width: 300px;
+        }
+        
+        @keyframes slide-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes fade-out {
+            to { opacity: 0; }
+        }
+    </style>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, updateDoc, doc, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
 
-    <h1 class="text-center text-3xl font-bold mt-6 text-blue-600">AI Mockup Prompt Generator</h1>
-
-    <div class="max-w-4xl mx-auto mt-6">
-        <div id="promptContainer"></div>
-    </div>
-
-    <script>
-        // ✅ Initialize Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDQz9IloW02h5fyBe8onrnQ45kAK8YT2eU",
             authDomain: "promptcook.firebaseapp.com",
             projectId: "promptcook",
-            storageBucket: "promptcook.appspot.com",
+            storageBucket: "promptcook.firebasestorage.app",
             messagingSenderId: "629727878561",
-            appId: "1:629727878561:web:a20882f86dad45e7a6bfe0"
+            appId: "1:629727878561:web:a20882f86dad45e7a6bfe0",
+            measurementId: "G-67BF4MEK2T"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+        
+        // Global object to store prompt data
+        window.promptCache = {};
 
-        function fetchPrompts() {
-            db.collection("prompts").get().then(snapshot => {
-                snapshot.forEach(doc => {
-                    let data = doc.data();
-                    renderPromptCard(doc.id, data.prompt, data.tags);
-                });
-            });
-        }
-
-        function renderPromptCard(id, prompt, tags) {
-            let container = document.getElementById("promptContainer");
-            let card = document.createElement("div");
-            card.className = "prompt-card bg-white p-6 rounded-lg shadow-lg mt-4";
+        document.addEventListener("DOMContentLoaded", async function () {
+            const promptContainer = document.getElementById("promptContainer");
+            const trendingContainer = document.getElementById("trendingContainer");
+            const searchInput = document.getElementById("searchPrompts");
+            const alertsContainer = document.getElementById("alertsContainer");
             
-            let inputsHTML = "";
-            let updatedPrompt = prompt;
-
-            tags.forEach(tag => {
-                let regex = new RegExp(`<${tag}>(.*?)<\/${tag}>`, "g");
-                let match = regex.exec(prompt);
-                let defaultValue = match ? match[1] : "";
-
-                inputsHTML += `
-                    <label class="block font-semibold text-gray-600 mt-2">${tag.charAt(0).toUpperCase() + tag.slice(1)}</label>
-                    <input type="text" data-tag="${tag}" value="${defaultValue}" 
-                        oninput="updatePrompt('${id}', this)"
-                        class="w-full p-2 border rounded-lg mt-1">
-                `;
+            // Show alert function
+            window.showAlert = function(message, type = "success") {
+                const colors = {
+                    success: "bg-green-500 border-green-600",
+                    error: "bg-red-500 border-red-600",
+                    warning: "bg-yellow-500 border-yellow-600",
+                    info: "bg-blue-500 border-blue-600"
+                };
+                
+                const alert = document.createElement("div");
+                alert.className = `alert ${colors[type]} text-white shadow-lg border-l-4`;
+                alert.innerHTML = message;
+                
+                alertsContainer.appendChild(alert);
+                
+                // Remove after animation completes
+                setTimeout(() => {
+                    alert.remove();
+                }, 3000);
+            };
+            
+            // Search functionality
+            searchInput.addEventListener("input", function() {
+                const searchTerm = this.value.toLowerCase();
+                filterPrompts(searchTerm);
             });
-
-            card.innerHTML = `
-                <p id="prompt-${id}" class="text-gray-800 text-lg mb-4">${updatedPrompt}</p>
-                ${inputsHTML}
-                <button onclick="copyToClipboard('${id}')" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg">
-                    Copy Prompt
-                </button>
-            `;
-            container.appendChild(card);
-        }
-
-        function updatePrompt(id, input) {
-            let tag = input.getAttribute("data-tag");
-            let newValue = input.value || `<${tag}>`; 
-            let promptText = document.getElementById(`prompt-${id}`).innerText;
-
-            let regex = new RegExp(`<${tag}>(.*?)<\/${tag}>`, "g");
-            let updatedText = promptText.replace(regex, `<${tag}>${newValue}</${tag}>`);
-
-            document.getElementById(`prompt-${id}`).innerText = updatedText;
-        }
-
-        function copyToClipboard(id) {
-            let text = document.getElementById(`prompt-${id}`).innerText;
-            navigator.clipboard.writeText(text);
-            alert("Copied to clipboard!");
-        }
-
-        fetchPrompts();
+            
+            function filterPrompts(searchTerm) {
+                const allCards = document.querySelectorAll(".prompt-card");
+                
+                allCards.forEach(card => {
+                    const title = card.querySelector("h3").textContent.toLowerCase();
+                    const promptText = card.querySelector(".prompt-text").textContent.toLowerCase();
+                    
+                    if (title.includes(searchTerm) || promptText.includes(searchTerm)) {
+                        card.classList.remove("hidden");
+                    } else {
+                        card.classList.add("hidden");
+                    }
+                });
+            }
+            // Function to render prompts with customization fields
+            async function fetchPrompts() {
+                try {
+                    const querySnapshot = await getDocs(collection(db, "prompts"));
+                    let html = "";
+                    let trendingPrompts = [];
+                    
+                    if (querySnapshot.empty) {
+                        promptContainer.innerHTML = `
+                            <div class="col-span-2 text-center p-8">
+                                <p class="text-xl text-gray-400">No prompts found. Be the first to add some!</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    querySnapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const promptId = docSnap.id;
+                        const promptText = data.prompt || "";
+                        
+                        // Store prompt in global cache
+                        window.promptCache[promptId] = {
+                            originalPrompt: promptText,
+                            currentPrompt: promptText,
+                            tags: {}
+                        };
+                        
+                        // Extract tags in either format: <tag>value</tag> or <tag>value<tag>
+                        const tagRegex1 = /<(\w+)>(.*?)<\/\1>/g;  // Format: <tag>value</tag>
+                        const tagRegex2 = /<(\w+)>(.*?)<\1>/g;    // Format: <tag>value<tag>
+                        
+                        let match;
+                        let tags = [];
+                        let displayPrompt = promptText;
+                        
+                        // Check for first tag format
+                        while ((match = tagRegex1.exec(promptText)) !== null) {
+                            const tagName = match[1];
+                            const tagValue = match[2];
+                            
+                            if (!tags.includes(tagName)) {
+                                tags.push(tagName);
+                                window.promptCache[promptId].tags[tagName] = tagValue;
+                            }
+                        }
+                        
+                        // Check for second tag format if no tags found with first format
+                        if (tags.length === 0) {
+                            while ((match = tagRegex2.exec(promptText)) !== null) {
+                                const tagName = match[1];
+                                const tagValue = match[2];
+                                
+                                if (!tags.includes(tagName)) {
+                                    tags.push(tagName);
+                                    window.promptCache[promptId].tags[tagName] = tagValue;
+                                }
+                            }
+                        }
+                        
+                        // If no tags detected, add default ones based on prompt type
+                        if (tags.length === 0) {
+                            // Extract common elements from prompts
+                            const title = data.title || "";
+                            
+                            if (title.includes("Product")) {
+                                tags.push("product");
+                                window.promptCache[promptId].tags["product"] = "your product";
+                                
+                                if (promptText.includes("background")) {
+                                    tags.push("background");
+                                    window.promptCache[promptId].tags["background"] = "modern background";
+                                }
+                                
+                                if (title.includes("Futuristic")) {
+                                    tags.push("environment");
+                                    window.promptCache[promptId].tags["environment"] = "futuristic showroom";
+                                } else if (title.includes("Nature")) {
+                                    tags.push("location");
+                                    window.promptCache[promptId].tags["location"] = "mountain landscape";
+                                } else if (title.includes("Vintage") || title.includes("Style")) {
+                                    tags.push("style");
+                                    window.promptCache[promptId].tags["style"] = "vintage";
+                                }
+                                
+                                tags.push("lighting");
+                                window.promptCache[promptId].tags["lighting"] = "professional lighting";
+                            }
+                        }
+                        
+                        // Format prompt for display (highlighting any detected tags)
+                        displayPrompt = promptText;
+                        for (const tagName of tags) {
+                            const tagValue = window.promptCache[promptId].tags[tagName];
+                            
+                            // Try both tag formats for replacement
+                            const regex1 = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'g');
+                            const regex2 = new RegExp(`<${tagName}>(.*?)<${tagName}>`, 'g');
+                            
+                            displayPrompt = displayPrompt
+                                .replace(regex1, `<span class="tag-highlight" data-tag="${tagName}">${tagValue}</span>`)
+                                .replace(regex2, `<span class="tag-highlight" data-tag="${tagName}">${tagValue}</span>`);
+                        }
+                        
+                        const copyCount = data.copyCount || 0;
+                        
+                        // Create the prompt card HTML
+                        const cardHtml = `
+                            <div class="prompt-card bg-gray-800/80 backdrop-blur-md rounded-xl shadow-lg overflow-hidden">
+                                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                                    <h3 class="font-bold text-xl text-white">${data.title || "Untitled Prompt"}</h3>
+                                    <span class="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded-full">
+                                        ${copyCount} ${copyCount === 1 ? 'use' : 'uses'}
+                                    </span>
+                                </div>
+                                
+                                <div class="p-4 bg-gray-700/30">
+                                    <p id="display-${promptId}" class="prompt-text text-gray-200 text-md">${displayPrompt}</p>
+                                </div>
+                                
+                                <div class="p-4 bg-blue-900/20 border-t border-blue-800/30">
+                                    <p class="text-blue-300 font-medium text-sm mb-3">✏️ Customize this prompt:</p>
+                                    <div class="space-y-3">
+                                        ${tags.map(tag => `
+                                            <div class="flex flex-col">
+                                                <label class="text-gray-300 capitalize mb-1 text-sm">${tag}:</label>
+                                                <input 
+                                                    type="text" 
+                                                    data-prompt-id="${promptId}" 
+                                                    data-tag="${tag}" 
+                                                    value="${window.promptCache[promptId].tags[tag]}" 
+                                                    class="prompt-input w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white"
+                                                    oninput="updatePromptPreview('${promptId}', '${tag}', this.value)"
+                                                    placeholder="Enter your ${tag} here">
+                                            </div>
+                                        `).join("")}
+                                        
+                                        <!-- Always add a custom field option -->
+                                        <div class="flex flex-col" id="add-tag-${promptId}">
+                                            <label class="text-gray-300 capitalize mb-1 text-sm">Add custom field:</label>
+                                            <div class="flex space-x-2">
+                                                <input 
+                                                    type="text" 
+                                                    id="new-tag-${promptId}"
+                                                    placeholder="Field name (e.g. color)" 
+                                                    class="prompt-input flex-1 p-2 border border-gray-600 rounded-lg bg-gray-800 text-white">
+                                                <button 
+                                                    onclick="addCustomField('${promptId}')"
+                                                    class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white">
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="p-4 bg-gray-800 border-t border-gray-700 flex space-x-2">
+                                    <button 
+                                        onclick="copyToClipboard('${promptId}')" 
+                                        class="copy-button flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-2 rounded-lg shadow-md hover:opacity-90 transition">
+                                        <span class="flex items-center justify-center">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                            </svg>
+                                            Copy Prompt
+                                        </span>
+                                    </button>
+                                    
+                                    <button 
+                                        onclick="resetPrompt('${promptId}')" 
+                                        class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg"
+                                        title="Reset to original values">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        
+                        html += cardHtml;
+                        
+                        // Add to trending if copy count is high enough
+                        if (copyCount >= 5) {
+                            trendingPrompts.push({
+                                id: promptId,
+                                copyCount,
+                                title: data.title,
+                                prompt: displayPrompt,
+                                firstTag: tags.length > 0 ? tags[0] : null,
+                                firstTagValue: tags.length > 0 ? window.promptCache[promptId].tags[tags[0]] : null
+                            });
+                        }
+                    });
+                    
+                    promptContainer.innerHTML = html;
+                    
+                    // Sort and display trending prompts
+                    trendingPrompts.sort((a, b) => b.copyCount - a.copyCount);
+                    let trendingHtml = "";
+                    
+                    if (trendingPrompts.length === 0) {
+                        trendingContainer.innerHTML = `
+                            <div class="col-span-3 text-center p-6">
+                                <p class="text-gray-400">No trending prompts yet. Start using prompts!</p>
+                            </div>
+                        `;
+                    } else {
+                        trendingPrompts.slice(0, 6).forEach(prompt => {
+                            trendingHtml += `
+                                <div class="trending-card p-5 bg-gradient-to-br from-indigo-600/80 to-purple-600/80 backdrop-blur-md text-white shadow-lg rounded-xl cursor-pointer transition hover:scale-105" 
+                                     onclick="scrollToPrompt('${prompt.id}')">
+                                    <h3 class="font-bold text-white text-lg mb-2">${prompt.title}</h3>
+                                    <p class="text-white/80 text-sm mb-3 line-clamp-2">${prompt.prompt}</p>
+                                    ${prompt.firstTag ? `
+                                        <div class="flex items-center mt-2 text-xs">
+                                            <span class="bg-white/20 px-2 py-1 rounded-full capitalize">${prompt.firstTag}: ${prompt.firstTagValue}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        });
+                        
+                        trendingContainer.innerHTML = trendingHtml;
+                    }
+                    
+                } catch (error) {
+                    console.error("Error fetching prompts: ", error);
+                    promptContainer.innerHTML = `
+                        <div class="col-span-2 text-center p-8">
+                            <p class="text-xl text-red-400">Error loading prompts. Please try again later.</p>
+                        </div>
+                    `;
+                }
+            }
+            // Function to add a custom field to a prompt
+            window.addCustomField = function(promptId) {
+                const newTagInput = document.getElementById(`new-tag-${promptId}`);
+                const tagName = newTagInput.value.trim().toLowerCase();
+                
+                if (!tagName) {
+                    showAlert("Please enter a field name", "warning");
+                    return;
+                }
+                
+                // Check if tag already exists
+                if (window.promptCache[promptId].tags[tagName]) {
+                    showAlert(`Field "${tagName}" already exists`, "warning");
+                    return;
+                }
+                
+                // Add new tag to cache
+                window.promptCache[promptId].tags[tagName] = "";
+                
+                // Create new input field
+                const tagsContainer = document.getElementById(`add-tag-${promptId}`).parentElement;
+                const newFieldHTML = `
+                    <div class="flex flex-col" id="field-${promptId}-${tagName}">
+                        <label class="text-gray-300 capitalize mb-1 text-sm">${tagName}:</label>
+                        <div class="flex space-x-2">
+                            <input 
+                                type="text" 
+                                data-prompt-id="${promptId}" 
+                                data-tag="${tagName}" 
+                                value="" 
+                                class="prompt-input flex-1 p-2 border border-gray-600 rounded-lg bg-gray-800 text-white"
+                                oninput="updatePromptPreview('${promptId}', '${tagName}', this.value)"
+                                placeholder="Enter your ${tagName} here">
+                            <button 
+                                onclick="removeCustomField('${promptId}', '${tagName}')"
+                                class="px-2 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                // Insert new field before the "Add custom field" option
+                const addTagElement = document.getElementById(`add-tag-${promptId}`);
+                addTagElement.insertAdjacentHTML('beforebegin', newFieldHTML);
+                
+                // Clear the input
+                newTagInput.value = "";
+                
+                // Update the display
+                updateCustomFieldDisplay(promptId, tagName, "");
+                
+                showAlert(`Added new field: ${tagName}`, "success");
+            };
+            
+            // Function to remove a custom field
+            window.removeCustomField = function(promptId, tagName) {
+                // Remove from DOM
+                const fieldElement = document.getElementById(`field-${promptId}-${tagName}`);
+                if (fieldElement) {
+                    fieldElement.remove();
+                }
+                
+                // Remove from cache
+                if (window.promptCache[promptId].tags[tagName]) {
+                    delete window.promptCache[promptId].tags[tagName];
+                }
+                
+                // Update the display
+                updatePromptDisplay(promptId);
+                
+                showAlert(`Removed field: ${tagName}`, "info");
+            };
+            
+            // Function to update the display for a custom field
+            function updateCustomFieldDisplay(promptId, tagName, value) {
+                const displayElement = document.getElementById(`display-${promptId}`);
+                const currentText = displayElement.innerHTML;
+                
+                // Add the new custom field to the display
+                const tagSpan = `<span class="tag-highlight" data-tag="${tagName}">${value || tagName}</span>`;
+                
+                // Check if we need to add the field to the display
+                if (!currentText.includes(`data-tag="${tagName}"`)) {
+                    // Add it at the end, before any punctuation
+                    let updatedText = currentText;
+                    if (updatedText.endsWith('.')) {
+                        updatedText = updatedText.slice(0, -1) + ` with ${tagSpan}.`;
+                    } else {
+                        updatedText = updatedText + ` with ${tagSpan}`;
+                    }
+                    
+                    displayElement.innerHTML = updatedText;
+                }
+            }
+            
+            // Function to update the entire prompt display
+            function updatePromptDisplay(promptId) {
+                const displayElement = document.getElementById(`display-${promptId}`);
+                let displayText = window.promptCache[promptId].originalPrompt;
+                
+                // Create a version with all tags highlighted
+                for (const [tagName, tagValue] of Object.entries(window.promptCache[promptId].tags)) {
+                    // Try to replace existing tags
+                    const regex1 = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'g');
+                    const regex2 = new RegExp(`<${tagName}>(.*?)<${tagName}>`, 'g');
+                    
+                    const replaced = displayText.replace(regex1, `<span class="tag-highlight" data-tag="${tagName}">${tagValue}</span>`)
+                                             .replace(regex2, `<span class="tag-highlight" data-tag="${tagName}">${tagValue}</span>`);
+                    
+                    // If no replacement was made, this is a custom field that doesn't exist in the original prompt
+                    if (replaced === displayText) {
+                        // We'll just append it at the end when we display
+                    } else {
+                        displayText = replaced;
+                    }
+                }
+                
+                // Now add any custom fields that weren't in the original
+                const customFields = [];
+                for (const [tagName, tagValue] of Object.entries(window.promptCache[promptId].tags)) {
+                    const regex1 = new RegExp(`data-tag="${tagName}"`, 'g');
+                    if (!regex1.test(displayText)) {
+                        customFields.push({
+                            tagName,
+                            tagValue: tagValue || tagName
+                        });
+                    }
+                }
+                
+                // Add custom fields at the end
+                if (customFields.length > 0) {
+                    const customFieldsText = customFields.map(field => 
+                        `<span class="tag-highlight" data-tag="${field.tagName}">${field.tagValue}</span>`
+                    ).join(', ');
+                    
+                    if (displayText.endsWith('.')) {
+                        displayText = displayText.slice(0, -1) + ` with ${customFieldsText}.`;
+                    } else {
+                        displayText = displayText + ` with ${customFieldsText}`;
+                    }
+                }
+                
+                displayElement.innerHTML = displayText;
+            }
+            // Updated function to update prompt preview
+            window.updatePromptPreview = function(promptId, tag, value) {
+                // Update the cache with new value
+                window.promptCache[promptId].tags[tag] = value;
+                
+                // Generate updated prompt with highlighted tags
+                updatePromptDisplay(promptId);
+                
+                // Update the actual prompt text for copying (without highlighting)
+                updatePromptText(promptId);
+            };
+            
+            // Function to update the actual prompt text
+            function updatePromptText(promptId) {
+                let updatedPrompt = window.promptCache[promptId].originalPrompt;
+                
+                // Replace tags in the original prompt
+                for (const [tagName, tagValue] of Object.entries(window.promptCache[promptId].tags)) {
+                    const regex1 = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'g');
+                    const regex2 = new RegExp(`<${tagName}>(.*?)<${tagName}>`, 'g');
+                    
+                    updatedPrompt = updatedPrompt.replace(regex1, `<${tagName}>${tagValue}</${tagName}>`)
+                                            .replace(regex2, `<${tagName}>${tagValue}<${tagName}>`);
+                }
+                
+                // For custom fields that weren't in the original, we'll add them when copying
+                window.promptCache[promptId].currentPrompt = updatedPrompt;
+            }
+            
+            // Enhanced copy to clipboard function
+            window.copyToClipboard = async function(promptId) {
+                try {
+                    let finalPrompt = window.promptCache[promptId].currentPrompt;
+                    
+                    // Get custom fields (fields that don't exist in the original prompt)
+                    const customFields = [];
+                    for (const [tagName, tagValue] of Object.entries(window.promptCache[promptId].tags)) {
+                        // Check if this tag exists in the original prompt
+                        const regex1 = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'g');
+                        const regex2 = new RegExp(`<${tagName}>(.*?)<${tagName}>`, 'g');
+                        
+                        if (!regex1.test(window.promptCache[promptId].originalPrompt) && 
+                            !regex2.test(window.promptCache[promptId].originalPrompt)) {
+                            customFields.push({
+                                tagName,
+                                tagValue: tagValue || tagName
+                            });
+                        }
+                    }
+                    
+                    // Add custom fields at the end
+                    if (customFields.length > 0) {
+                        const customFieldsText = customFields.map(field => field.tagValue).join(', ');
+                        
+                        if (finalPrompt.endsWith('.')) {
+                            finalPrompt = finalPrompt.slice(0, -1) + ` with ${customFieldsText}.`;
+                        } else {
+                            finalPrompt = finalPrompt + ` with ${customFieldsText}`;
+                        }
+                    }
+                    
+                    // Generate plain text version by removing all tags
+                    const plainText = finalPrompt.replace(/<(\w+)>(.*?)<\/\1>/g, '$2')  // Format: <tag>value</tag>
+                                            .replace(/<(\w+)>(.*?)<\1>/g, '$2');    // Format: <tag>value<tag>
+                    
+                    // Copy the plain text to clipboard
+                    await navigator.clipboard.writeText(plainText);
+                    
+                    // Visual feedback
+                    const button = document.querySelector(`button[onclick="copyToClipboard('${promptId}')"]`);
+                    const originalContent = button.innerHTML;
+                    button.innerHTML = `
+                        <span class="flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            Copied!
+                        </span>
+                    `;
+                    
+                    // Update copy count in Firestore
+                    const promptDoc = doc(db, "prompts", promptId);
+                    await updateDoc(promptDoc, {
+                        copyCount: increment(1)
+                    });
+                    
+                    showAlert("Prompt copied to clipboard!", "success");
+                    
+                    // Reset button after a delay
+                    setTimeout(() => {
+                        button.innerHTML = originalContent;
+                    }, 2000);
+                    
+                    // Refresh prompts to update counts
+                    setTimeout(() => {
+                        fetchPrompts();
+                    }, 2500);
+                    
+                } catch (error) {
+                    console.error("Error copying prompt: ", error);
+                    showAlert("Failed to copy. Please try again.", "error");
+                }
+            };
+            
+            window.resetPrompt = function(promptId) {
+                const originalPrompt = window.promptCache[promptId].originalPrompt;
+                
+                // Reset all tag values
+                const tagRegex1 = /<(\w+)>(.*?)<\/\1>/g;  // Format: <tag>value</tag>
+                const tagRegex2 = /<(\w+)>(.*?)<\1>/g;    // Format: <tag>value<tag>
+                
+                let match;
+                
+                // Reset to original prompt
+                window.promptCache[promptId].currentPrompt = originalPrompt;
+                window.promptCache[promptId].tags = {};
+                
+                // Extract original tags and values
+                while ((match = tagRegex1.exec(originalPrompt)) !== null) {
+                    const tagName = match[1];
+                    const tagValue = match[2];
+                    window.promptCache[promptId].tags[tagName] = tagValue;
+                }
+                
+                while ((match = tagRegex2.exec(originalPrompt)) !== null) {
+                    const tagName = match[1];
+                    const tagValue = match[2];
+                    window.promptCache[promptId].tags[tagName] = tagValue;
+                }
+                
+                // Reload the prompt card to reset UI
+                fetchPrompts();
+                
+                showAlert("Prompt reset to original values", "info");
+            };
+            
+            window.scrollToPrompt = function(promptId) {
+                const element = document.getElementById(`display-${promptId}`);
+                if (element) {
+                    const card = element.closest('.prompt-card');
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.classList.add('ring-4', 'ring-purple-500', 'ring-opacity-50');
+                    setTimeout(() => {
+                        card.classList.remove('ring-4', 'ring-purple-500', 'ring-opacity-50');
+                    }, 2000);
+                }
+            };
+            
+            fetchPrompts();
+        });
     </script>
+</head>
+<body class="bg-gray-900 min-h-screen font-sans pb-16">
+    <!-- Alerts Container -->
+    <div id="alertsContainer" class="fixed top-4 right-4 z-50"></div>
 
+    <header class="py-10 px-4 relative">
+        <!-- Logo in top right -->
+        <div class="absolute top-4 right-4 md:top-6 md:right-6">
+            <img src="../logo.png" alt="Prompt Generator Logo" class="h-10 md:h-12">
+        </div>
+        
+        <div class="max-w-6xl mx-auto text-center">
+            <h1 class="text-5xl font-bold gradient-text">🚀 AI Prompt Generator</h1>
+            <p class="mt-4 text-gray-300 text-xl max-w-3xl mx-auto">
+                Create stunning AI images without technical knowledge. 
+                Customize our ready-to-use prompts for your products and ideas.
+            </p>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4">
+        <!-- Search Bar -->
+        <div class="mt-8 mb-12">
+            <div class="relative max-w-2xl mx-auto">
+                <input 
+                    id="searchPrompts"
+                    type="text" 
+                    placeholder="Search for prompts..." 
+                    class="w-full py-3 px-4 pl-12 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <div class="absolute left-4 top-3.5">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Example Section -->
+        <div class="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 p-6 rounded-xl mb-12">
+            <h2 class="text-2xl font-semibold mb-3 text-white">How to Use ✨</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-black/30 p-5 rounded-lg">
+                    <div class="flex items-center mb-3">
+                        <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white font-bold mr-2">1</span>
+                        <p class="text-white font-medium">Find a prompt you like</p>
+                    </div>
+                    <p class="text-gray-300 mb-3">Browse our collection of professionally crafted prompts designed to showcase your products.</p>
+                    <div class="bg-gray-800/50 p-3 rounded">
+                        <p class="text-gray-200">A giant lipstick kept in front of taj mahal at evening...</p>
+                    </div>
+                </div>
+                <div class="bg-black/30 p-5 rounded-lg">
+                    <div class="flex items-center mb-3">
+                        <span class="flex items-center justify-center w-7 h-7 rounded-full bg-purple-600 text-white font-bold mr-2">2</span>
+                        <p class="text-white font-medium">Customize it</p>
+                    </div>
+                    <p class="text-gray-300 mb-3">Enter your product details and preferences in the input fields below each prompt.</p>
+                    <div class="bg-gray-800/50 p-3 rounded">
+                        <div class="flex items-center mb-2">
+                            <label class="text-gray-300 w-24">Product:</label>
+                            <div class="flex-1 bg-blue-900/30 px-2 py-1 rounded text-blue-300">perfume bottle</div>
+                        </div>
+                        <div class="flex items-center">
+                            <label class="text-gray-300 w-24">Place:</label>
+                            <div class="flex-1 bg-blue-900/30 px-2 py-1 rounded text-blue-300">Eiffel Tower</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-black/30 p-5 rounded-lg">
+                    <div class="flex items-center mb-3">
+                        <span class="flex items-center justify-center w-7 h-7 rounded-full bg-pink-600 text-white font-bold mr-2">3</span>
+                        <p class="text-white font-medium">Copy & Use</p>
+                    </div>
+                    <p class="text-gray-300 mb-3">See the preview update in real-time, then copy your customized prompt with one click.</p>
+                    <div class="bg-gray-800/50 p-3 rounded">
+                        <p class="text-gray-200">A giant <span class="text-purple-400 font-medium">perfume bottle</span> kept in front of <span class="text-purple-400 font-medium">Eiffel Tower</span> at <span class="text-purple-400 font-medium">sunset</span>...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trending Prompts -->
+        <div class="mb-12">
+            <h2 class="text-2xl font-semibold mb-6 text-white">🔥 Trending Prompts</h2>
+            <div id="trendingContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </div>
+
+        <!-- All Prompts -->
+        <div>
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-6">
+                <h2 class="text-2xl font-semibold text-white mb-2 md:mb-0">📜 All Prompts</h2>
+                
+            </div>
+            <div id="promptContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+        </div>
+    </main>
+
+    <footer class="mt-16 py-8 bg-gray-800/50">
+        <div class="max-w-6xl mx-auto px-4 text-center text-gray-400">
+            <p>Create beautiful AI product images for your business with our customizable prompts.</p>
+            <p class="mt-2">© 2025 AI Prompt Generator. All rights reserved.</p>
+        </div>
+    </footer>
 </body>
 </html>
